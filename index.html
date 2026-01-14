@@ -3,808 +3,1326 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ניתוח יעילות תפעולית - דקות/ק"מ</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <title>כלי ניתוח מפות תנועה | תקנה 168</title>
+    <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
-        body { font-family: system-ui, -apple-system, sans-serif; background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); min-height: 100vh; }
-        .upload-zone { border: 2px dashed #94a3b8; transition: all 0.3s; }
-        .upload-zone:hover, .upload-zone.dragover { border-color: #3b82f6; background: #eff6ff; }
-        .upload-zone.has-file { border-color: #22c55e; background: #f0fdf4; }
-        
-        .layout { display: grid; grid-template-columns: 320px 1fr; min-height: calc(100vh - 80px); }
-        .sidebar { background: white; border-left: 1px solid #e2e8f0; padding: 24px; position: sticky; top: 80px; height: calc(100vh - 80px); overflow-y: auto; display: flex; flex-direction: column; gap: 16px; box-shadow: -5px 0 15px rgba(0,0,0,0.03); }
-        .main { padding: 32px; overflow-y: auto; }
-        
-        .card { background: white; border-radius: 12px; padding: 16px; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-        .stat-val { font-size: 1.75rem; font-weight: 800; line-height: 1; margin-top: 4px; }
-        .stat-lbl { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; color: #64748b; }
-        .stat-sub { font-size: 0.75rem; margin-top: 4px; }
-        
-        .compare-box { display: flex; gap: 8px; align-items: center; padding: 8px 12px; background: #f8fafc; border-radius: 8px; margin-top: 8px; }
-        .compare-label { font-size: 0.65rem; color: #64748b; }
-        .compare-val { font-size: 0.85rem; font-weight: 700; }
-        
-        .table-wrap { background: white; border-radius: 8px; border: 1px solid #e2e8f0; overflow: hidden; }
-        .data-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
-        .data-table th { background: #f8fafc; color: #475569; font-weight: 700; text-align: right; padding: 10px 12px; border-bottom: 2px solid #e2e8f0; position: sticky; top: 0; white-space: nowrap; }
-        .data-table td { padding: 8px 12px; border-bottom: 1px solid #f1f5f9; }
-        .data-table tr:hover { background: #f8fafc; }
-        .clickable { cursor: pointer; color: #2563eb; text-decoration: underline; }
-        .clickable:hover { color: #1d4ed8; }
-        
-        .tabs-nav { display: flex; gap: 4px; border-bottom: 1px solid #e2e8f0; margin-bottom: 20px; overflow-x: auto; }
-        .tab-btn { padding: 10px 14px; font-weight: 600; font-size: 0.85rem; color: #64748b; cursor: pointer; border-bottom: 3px solid transparent; white-space: nowrap; display: flex; align-items: center; gap: 6px; }
-        .tab-btn.active { color: #2563eb; border-bottom-color: #2563eb; background: white; }
-        .badge { background: #e2e8f0; color: #475569; font-size: 0.65rem; padding: 2px 6px; border-radius: 8px; }
-        .tab-btn.active .badge { background: #dbeafe; color: #1e40af; }
-        
-        .status-ok { background: #dcfce7; color: #166534; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 700; }
-        .status-warn { background: #fef3c7; color: #92400e; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 700; }
-        .status-bad { background: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 700; }
-        
-        .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-        .modal-content { background: white; border-radius: 16px; max-width: 900px; width: 95%; max-height: 85vh; overflow: hidden; display: flex; flex-direction: column; }
-        .modal-header { padding: 20px 24px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; }
-        .modal-body { padding: 24px; overflow-y: auto; flex: 1; }
-        .modal-close { cursor: pointer; color: #64748b; font-size: 1.5rem; }
-        .modal-close:hover { color: #1e293b; }
-        
-        .breakdown-bar { height: 24px; border-radius: 4px; overflow: hidden; display: flex; }
-        .breakdown-segment { height: 100%; display: flex; align-items: center; justify-content: center; font-size: 0.65rem; font-weight: 700; color: white; min-width: 30px; }
-        
-        .activity-row { display: grid; grid-template-columns: 100px 1fr 80px 80px; gap: 12px; padding: 8px 12px; border-bottom: 1px solid #f1f5f9; align-items: center; }
-        .activity-row.with-duty { grid-template-columns: 100px 1fr 60px 50px 70px; }
-        .activity-row:hover { background: #f8fafc; }
-        .activity-pt { background: #dcfce7; }
-        .activity-non-pt { background: #fef3c7; }
-        
-        .gap-card { background: white; border-radius: 12px; padding: 20px; border: 1px solid #e2e8f0; margin-bottom: 16px; }
-        .gap-title { font-size: 1rem; font-weight: 700; color: #1e293b; margin-bottom: 12px; }
-        .gap-breakdown { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
-        .gap-item { background: #f8fafc; border-radius: 8px; padding: 12px; text-align: center; }
-        .gap-item-value { font-size: 1.5rem; font-weight: 800; }
-        .gap-item-label { font-size: 0.7rem; color: #64748b; margin-top: 4px; }
-        
-        .hidden { display: none !important; }
-        @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } .sidebar { position: relative; height: auto; } }
+        :root { --bg-primary: #000000; --bg-secondary: #0a0a0a; --bg-card: #111111; --accent-red: #ef4444; --accent-green: #22c55e; --accent-yellow: #eab308; --accent-blue: #3b82f6; --accent-cyan: #06b6d4; --accent-purple: #a855f7; --accent-orange: #f97316; --text-primary: #ffffff; --text-secondary: #888888; --border-color: #222222; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Heebo', sans-serif; background: var(--bg-primary); color: var(--text-primary); min-height: 100vh; }
+        .container { max-width: 1900px; margin: 0 auto; padding: 1rem; }
+        .header { text-align: center; margin-bottom: 1.5rem; padding: 1.5rem; background: linear-gradient(135deg, var(--bg-card), var(--bg-secondary)); border-radius: 16px; border: 1px solid var(--border-color); }
+        .header h1 { font-size: 1.8rem; font-weight: 800; background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue), var(--accent-purple)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+        .section { background: var(--bg-card); border-radius: 12px; padding: 1.25rem; border: 1px solid var(--border-color); margin-bottom: 1rem; }
+        .section-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; }
+        .upload-zone { border: 2px dashed var(--border-color); border-radius: 10px; padding: 1.5rem; text-align: center; cursor: pointer; transition: all 0.3s; }
+        .upload-zone:hover { border-color: var(--accent-blue); background: rgba(59, 130, 246, 0.05); }
+        .upload-zone.has-files { border-color: var(--accent-green); background: rgba(34, 197, 94, 0.05); }
+        .upload-zone input { display: none; }
+        .btn { padding: 0.5rem 1rem; border-radius: 8px; border: none; cursor: pointer; font-family: inherit; font-weight: 600; transition: all 0.2s; font-size: 0.85rem; }
+        .btn-primary { background: linear-gradient(135deg, var(--accent-blue), var(--accent-cyan)); color: white; }
+        .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3); }
+        .btn-secondary { background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border-color); }
+        .btn-warning { background: linear-gradient(135deg, var(--accent-orange), var(--accent-yellow)); color: #000; }
+        .btn-muslim { background: linear-gradient(135deg, #059669, #10b981); color: white; }
+        .btn-sm { padding: 0.3rem 0.6rem; font-size: 0.75rem; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.6rem; margin-bottom: 1rem; }
+        .stat-card { background: var(--bg-secondary); border-radius: 10px; padding: 0.8rem; text-align: center; }
+        .stat-card .value { font-size: 1.4rem; font-weight: 700; }
+        .stat-card .value.red { color: var(--accent-red); }
+        .stat-card .value.green { color: var(--accent-green); }
+        .stat-card .value.yellow { color: var(--accent-yellow); }
+        .stat-card .value.blue { color: var(--accent-blue); }
+        .stat-card .value.purple { color: var(--accent-purple); }
+        .stat-card .value.cyan { color: var(--accent-cyan); }
+        .stat-card .value.orange { color: var(--accent-orange); }
+        .stat-card .label { color: var(--text-secondary); font-size: 0.7rem; margin-top: 0.2rem; }
+        .stat-card .sub { font-size: 0.65rem; color: var(--accent-green); margin-top: 0.1rem; }
+        .info-box { background: rgba(59, 130, 246, 0.1); border: 1px solid var(--accent-blue); border-radius: 10px; padding: 0.75rem; margin-bottom: 1rem; font-size: 0.8rem; }
+        .info-box.warning { background: rgba(234, 179, 8, 0.1); border-color: var(--accent-yellow); }
+        .table-wrapper { overflow-x: auto; max-height: 600px; overflow-y: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.72rem; }
+        th, td { padding: 0.35rem 0.25rem; text-align: center; border-bottom: 1px solid var(--border-color); white-space: nowrap; }
+        th { background: var(--bg-secondary); position: sticky; top: 0; z-index: 10; font-weight: 600; color: var(--text-secondary); cursor: pointer; font-size: 0.68rem; }
+        th:hover { color: var(--accent-cyan); }
+        tbody tr:hover { background: rgba(59, 130, 246, 0.1); }
+        .badge { display: inline-block; padding: 0.15rem 0.35rem; border-radius: 4px; font-size: 0.62rem; font-weight: 600; }
+        .badge-red { background: rgba(239, 68, 68, 0.2); color: var(--accent-red); }
+        .badge-yellow { background: rgba(234, 179, 8, 0.2); color: var(--accent-yellow); }
+        .badge-green { background: rgba(34, 197, 94, 0.2); color: var(--accent-green); }
+        .badge-blue { background: rgba(59, 130, 246, 0.2); color: var(--accent-blue); }
+        .badge-purple { background: rgba(168, 85, 247, 0.2); color: var(--accent-purple); }
+        .badge-gray { background: rgba(148, 163, 184, 0.2); color: var(--text-secondary); }
+        .badge-orange { background: rgba(249, 115, 22, 0.2); color: var(--accent-orange); }
+        .badge-cyan { background: rgba(6, 182, 212, 0.2); color: var(--accent-cyan); }
+        .filters { display: flex; gap: 0.5rem; margin-bottom: 0.75rem; flex-wrap: wrap; align-items: center; }
+        .filters select, .filters input { padding: 0.35rem 0.5rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-family: inherit; font-size: 0.8rem; }
+        .tabs { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
+        .tab { padding: 0.5rem 1rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 0.85rem; }
+        .tab.active { background: var(--accent-blue); border-color: var(--accent-blue); }
+        .highlight-row { background: rgba(239, 68, 68, 0.1) !important; }
+        .warning-row { background: rgba(234, 179, 8, 0.1) !important; }
+        .hidden { display: none; }
+        .progress { width: 100%; height: 6px; background: var(--bg-secondary); border-radius: 3px; overflow: hidden; margin: 0.5rem 0; }
+        .progress-bar { height: 100%; background: linear-gradient(90deg, var(--accent-blue), var(--accent-cyan)); transition: width 0.3s; }
+        .chip { display: inline-block; padding: 0.2rem 0.5rem; background: var(--bg-secondary); border-radius: 4px; font-size: 0.75rem; margin: 0.1rem; }
+        .chip-remove { cursor: pointer; margin-right: 0.3rem; color: var(--accent-red); }
+        .settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.75rem; }
+        .setting-item { display: flex; flex-direction: column; gap: 0.2rem; }
+        .setting-item label { font-size: 0.75rem; color: var(--text-secondary); }
+        .setting-item input, .setting-item select { padding: 0.35rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); font-size: 0.85rem; }
+        .collapsible { cursor: pointer; }
+        .collapsible-content { max-height: 0; overflow: hidden; transition: max-height 0.3s; }
+        .collapsible-content.open { max-height: 2000px; }
+        .date-chips { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.5rem; min-height: 30px; padding: 0.5rem; background: var(--bg-secondary); border-radius: 6px; }
+        .holiday-section { margin-top: 0.5rem; padding: 0.5rem; background: rgba(0,0,0,0.2); border-radius: 6px; }
+        .holiday-section-title { font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.3rem; }
     </style>
 </head>
 <body>
-    <header class="bg-white shadow-sm border-b border-slate-200 sticky top-0 z-50">
-        <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-            <div class="flex items-center gap-3">
-                <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center">
-                    <i class="fas fa-gauge-high text-white"></i>
-                </div>
-                <div>
-                    <h1 class="text-xl font-bold text-slate-800">ניתוח יעילות תפעולית</h1>
-                    <p class="text-xs text-slate-500">דקות/ק"מ | תכנון vs ביצוע | יעילות נהגים</p>
-                </div>
-            </div>
-            <div id="status-indicator" class="text-sm text-slate-500"><i class="fas fa-circle-info ml-1"></i> טען קבצים להתחלה</div>
-        </div>
-    </header>
+    <div class="container">
+        <header class="header">
+            <h1>🚌 כלי ניתוח מפות תנועה</h1>
+            <p style="color: var(--text-secondary); font-size: 0.85rem;">אחוזון דינמי לפי מק"ט • חיזוי אי-ביצוע ואי-דיוק • בדיקת תקנה 168 • ניתוח ריקות</p>
+        </header>
 
-    <div id="upload-section" class="max-w-4xl mx-auto p-6">
-        <div class="grid md:grid-cols-2 gap-6 mb-6">
-            <div class="card">
-                <h3 class="font-bold text-slate-700 mb-3 flex items-center gap-2">
-                    <i class="fas fa-file-csv text-green-500"></i> קובץ ביצוע (סדרן) <span class="text-red-500">*</span>
-                </h3>
-                <div id="exec-zone" class="upload-zone rounded-lg p-6 text-center cursor-pointer" onclick="document.getElementById('exec-file').click()">
-                    <i class="fas fa-cloud-upload-alt text-3xl text-slate-400 mb-2"></i>
-                    <p class="text-sm text-slate-600">גרור קובץ CSV או לחץ לבחירה</p>
-                    <p id="exec-filename" class="text-xs text-slate-400 mt-1"></p>
+        <!-- Upload Section -->
+        <div class="grid-2">
+            <div class="section">
+                <div class="section-title">📂 קבצי ביצוע (Actuals)</div>
+                <div class="upload-zone" id="actualsZone" onclick="document.getElementById('actualsInput').click()">
+                    <input type="file" id="actualsInput" multiple accept=".csv,.zip">
+                    <div>📁 גרור קבצי CSV או לחץ לבחירה</div>
                 </div>
-                <input type="file" id="exec-file" class="hidden" accept=".csv" onchange="handleFile(this, 'exec')">
+                <div id="actualsFiles" style="margin-top: 0.5rem;"></div>
             </div>
-            <div class="card">
-                <h3 class="font-bold text-slate-700 mb-3 flex items-center gap-2">
-                    <i class="fas fa-file-csv text-blue-500"></i> קובץ תכנון (אופטיבוס) <span class="text-slate-400 text-xs">(אופציונלי)</span>
-                </h3>
-                <div id="plan-zone" class="upload-zone rounded-lg p-6 text-center cursor-pointer" onclick="document.getElementById('plan-file').click()">
-                    <i class="fas fa-cloud-upload-alt text-3xl text-slate-400 mb-2"></i>
-                    <p class="text-sm text-slate-600">גרור קובץ CSV או לחץ לבחירה</p>
-                    <p id="plan-filename" class="text-xs text-slate-400 mt-1"></p>
+            <div class="section">
+                <div class="section-title">🗺️ מפת תנועה (Service Map)</div>
+                <div class="upload-zone" id="mapZone" onclick="document.getElementById('mapInput').click()">
+                    <input type="file" id="mapInput" accept=".csv">
+                    <div>📁 גרור קובץ CSV או לחץ לבחירה</div>
                 </div>
-                <input type="file" id="plan-file" class="hidden" accept=".csv" onchange="handleFile(this, 'plan')">
+                <div id="mapFile" style="margin-top: 0.5rem;"></div>
             </div>
         </div>
-        <div class="card bg-blue-50 border-blue-200 mb-6">
-            <h4 class="font-bold text-blue-800 mb-2"><i class="fas fa-info-circle ml-1"></i> מידע על הנוסחאות</h4>
-            <div class="text-sm text-blue-700 space-y-1">
-                <p><strong>דקות/ק"מ</strong> = (שעות תשלום נהג × 60) / ק"מ תח"צ</p>
-                <p><strong>יעילות נהג</strong> = זמן תח"צ / זמן עבודה כולל (יעד: ≥75%)</p>
-                <p><strong>תח"צ</strong> = נסיעות עם מספר קו (service_trip באופטיבוס)</p>
-            </div>
-        </div>
-        <!-- Manual KM Input -->
-        <div id="manual-km-section" class="card bg-amber-50 border-amber-200 mb-6 hidden">
-            <h4 class="font-bold text-amber-800 mb-2"><i class="fas fa-exclamation-triangle ml-1"></i> לא נמצאה עמודת מרחק בקובץ הביצוע</h4>
-            <p class="text-sm text-amber-700 mb-3">הזן ק"מ תח"צ ידנית או השאר ריק לשימוש בנתוני התכנון:</p>
-            <div class="flex gap-4 items-center">
-                <div class="flex-1">
-                    <label class="text-xs text-amber-600">ק"מ תח"צ ביצוע (אופציונלי)</label>
-                    <input type="number" id="manual-km" placeholder="לדוגמא: 30000" class="w-full p-2 border rounded-lg text-sm mt-1">
-                </div>
-                <div class="text-xs text-amber-600 mt-4">
-                    <span id="planning-km-hint"></span>
-                </div>
-            </div>
-        </div>
-
-        <button id="analyze-btn" onclick="runAnalysis()" disabled class="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white py-4 rounded-xl text-lg font-bold hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2">
-            <i class="fas fa-calculator"></i> הפעל ניתוח
-        </button>
-    </div>
-
-    <div id="results-section" class="hidden">
-        <div class="layout">
-            <aside class="sidebar">
-                <div><h2 class="text-lg font-black text-slate-800 flex items-center gap-2"><i class="fas fa-chart-pie text-blue-600"></i> תוצאות</h2><p class="text-xs text-slate-400 mt-1" id="analysis-date"></p></div>
-                <div class="card border-r-4 border-blue-500"><div class="stat-lbl">דקות/ק"מ ביצוע</div><div class="stat-val text-blue-600" id="kpi-min-km">-</div><div class="compare-box" id="compare-min-km"></div></div>
-                <div class="card border-r-4 border-cyan-500"><div class="stat-lbl">ק"מ תח"צ ביצוע</div><div class="stat-val text-cyan-600" id="kpi-pt-km">-</div><div class="compare-box" id="compare-pt-km"></div></div>
-                <div class="card border-r-4 border-green-500"><div class="stat-lbl">% תח"צ ביצוע</div><div class="stat-val" id="kpi-pt-pct">-</div><div class="compare-box" id="compare-pt-pct"></div></div>
-                <div class="card border-r-4 border-red-500"><div class="stat-lbl">נהגים מתחת 75%</div><div class="stat-val text-red-500" id="kpi-low-count">-</div><div class="stat-sub text-slate-400" id="kpi-low-sub"></div></div>
-                <div class="card border-r-4 border-purple-500"><div class="stat-lbl">סה"כ נהגים</div><div class="stat-val text-slate-700" id="kpi-total-drivers">-</div></div>
-                <div class="mt-auto space-y-2">
-                    <button onclick="exportExcel()" class="w-full bg-green-600 text-white py-2.5 rounded-lg text-sm font-bold hover:bg-green-700 flex items-center justify-center gap-2"><i class="fas fa-file-excel"></i> ייצוא Excel</button>
-                    <button onclick="downloadHTML()" class="w-full bg-slate-700 text-white py-2.5 rounded-lg text-sm font-bold hover:bg-slate-800 flex items-center justify-center gap-2"><i class="fas fa-download"></i> שמור דוח HTML</button>
-                    <button onclick="resetAnalysis()" class="w-full bg-slate-200 text-slate-700 py-2.5 rounded-lg text-sm font-bold hover:bg-slate-300 flex items-center justify-center gap-2"><i class="fas fa-redo"></i> ניתוח חדש</button>
-                </div>
-            </aside>
-            <main class="main">
-                <div class="mb-4"><input type="text" id="search" onkeyup="filterTable()" placeholder="חיפוש..." class="w-full p-2.5 pr-4 border rounded-lg text-sm"></div>
-                <div class="tabs-nav">
-                    <div class="tab-btn active" onclick="showTab('drivers', this)"><i class="fas fa-user"></i> נהגים <span class="badge" id="badge-drivers">0</span></div>
-                    <div class="tab-btn" onclick="showTab('low', this)"><i class="fas fa-exclamation-triangle"></i> מתחת 75% <span class="badge" id="badge-low">0</span></div>
-                    <div class="tab-btn" onclick="showTab('planning', this)"><i class="fas fa-clipboard-list"></i> תכנון <span class="badge" id="badge-planning">0</span></div>
-                    <div class="tab-btn" onclick="showTab('gaps', this)"><i class="fas fa-chart-bar"></i> ניתוח פערים</div>
-                </div>
-                <div id="view-drivers" class="view"><div class="table-wrap" style="max-height: calc(100vh - 280px); overflow-y: auto;"><table class="data-table" id="table-drivers"><thead><tr><th>תאריך</th><th>נהג</th><th>סידור</th><th>התחלה</th><th>סיום</th><th>דקות כולל</th><th>דקות תח"צ</th><th>ק"מ תח"צ</th><th>דק/ק"מ</th><th>% תח"צ</th><th>סטטוס</th></tr></thead><tbody></tbody></table></div></div>
-                <div id="view-low" class="view hidden"><div class="table-wrap" style="max-height: calc(100vh - 280px); overflow-y: auto;"><table class="data-table" id="table-low"><thead><tr><th>תאריך</th><th>נהג</th><th>התחלה</th><th>סיום</th><th>דקות כולל</th><th>דקות תח"צ</th><th>% תח"צ</th><th>פער מ-75%</th></tr></thead><tbody></tbody></table></div></div>
-                <div id="view-planning" class="view hidden"><div class="table-wrap" style="max-height: calc(100vh - 280px); overflow-y: auto;"><table class="data-table" id="table-planning"><thead><tr><th>סידור</th><th>דקות כולל</th><th>דקות תח"צ</th><th>ק"מ תח"צ</th><th>דק/ק"מ</th><th>% תח"צ</th><th>נסיעות</th></tr></thead><tbody></tbody></table></div></div>
-                <div id="view-gaps" class="view hidden"><div id="gaps-container"></div></div>
-            </main>
-        </div>
-    </div>
-
-    <div id="detail-modal" class="modal hidden" onclick="if(event.target===this)closeModal()">
-        <div class="modal-content">
-            <div class="modal-header"><h3 class="text-lg font-bold" id="modal-title">פירוט</h3><span class="modal-close" onclick="closeModal()"><i class="fas fa-times"></i></span></div>
-            <div class="modal-body" id="modal-body"></div>
-        </div>
-    </div>
-
-<script>
-let STATE = { execData: null, planData: null, execResults: [], planResults: [], gaps: [], driverDetails: {}, dutyDetails: {}, hasExecKm: false, planPtKm: 0, isNegev: false };
-const CATEGORY_COLORS = { 'תח"צ': '#22c55e', 'הכנת מכונה': '#f59e0b', 'נסיעה ריקה': '#ef4444', 'המתנה': '#8b5cf6', 'הפסקה': '#06b6d4', 'לרשות': '#ec4899', 'אחר': '#64748b' };
-const MAX_TRIP_KM = 200; // סף מקסימלי לנסיעה (לסינון חריגים)
-
-function isNegevCluster(filename, data) {
-    // זיהוי אשכול נגב לפי שם קובץ
-    const fn = (filename || '').toLowerCase();
-    if (fn.includes('נגב') || fn.includes('negev')) return true;
-    // זיהוי לפי תוכן - חיפוש תחנות אופייניות לנגב
-    const negevStations = ['ב"ש', 'באר שבע', 'דימונה', 'ערד', 'ירוחם', 'מצפה רמון', 'אופקים', 'נתיבות', 'שדרות'];
-    const sampleDescs = (data || []).slice(0, 100).map(r => String(r['תאור'] || r['Description'] || '')).join(' ');
-    return negevStations.some(s => sampleDescs.includes(s));
-}
-
-function handleFile(input, type) {
-    const file = input.files[0]; if (!file) return;
-    document.getElementById(type + '-zone').classList.add('has-file');
-    document.getElementById(type + '-filename').textContent = file.name;
-    Papa.parse(file, { header: true, encoding: 'UTF-8', complete: r => { 
-        const data = r.data.filter(row => Object.values(row).some(v => v));
-        if (type === 'exec') {
-            STATE.execData = data;
-            // בדיקה אם יש עמודת מרחק
-            const cols = Object.keys(data[0] || {});
-            STATE.hasExecKm = cols.some(c => c.includes('מרחק'));
-            // זיהוי אשכול נגב
-            STATE.isNegev = isNegevCluster(file.name, data);
-            if (!STATE.hasExecKm) {
-                document.getElementById('manual-km-section').classList.remove('hidden');
-            } else {
-                document.getElementById('manual-km-section').classList.add('hidden');
-            }
-        } else {
-            STATE.planData = data;
-            // זיהוי אשכול נגב גם מתכנון
-            if (!STATE.isNegev) STATE.isNegev = isNegevCluster(file.name, data);
-            // חישוב ק"מ תח"צ מתכנון (עם סינון חריגים)
-            STATE.planPtKm = data.filter(r => r['Event Type'] === 'service_trip').reduce((sum, r) => {
-                const km = parseFloat(r['Distance']) || 0;
-                // סינון ק"מ חריג אם לא נגב
-                if (!STATE.isNegev && km > MAX_TRIP_KM) return sum;
-                return sum + km;
-            }, 0);
-            document.getElementById('planning-km-hint').textContent = `ק"מ תח"צ מתכנון: ${STATE.planPtKm.toFixed(0)}`;
-        }
-        updateAnalyzeButton(); 
-    }});
-}
-
-function updateAnalyzeButton() {
-    const btn = document.getElementById('analyze-btn'), status = document.getElementById('status-indicator');
-    if (STATE.execData) { btn.disabled = false; status.innerHTML = '<i class="fas fa-check-circle text-green-500 ml-1"></i> מוכן לניתוח'; }
-    else { btn.disabled = true; status.innerHTML = '<i class="fas fa-circle-info ml-1"></i> טען קובץ ביצוע'; }
-}
-
-function parseTime(t) { if (!t) return null; const p = String(t).trim().replace('.', ':').split(':'); return (parseInt(p[0])||0)*60 + (parseInt(p[1])||0); }
-function getHour(t) { if (!t) return null; return parseInt(String(t).split(':')[0]); }
-function formatMinutes(m) { if (m == null) return ''; return `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`; }
-
-function detectMidnightCrossing(starts, ends) {
-    const hours = starts.concat(ends).map(t => getHour(t)).filter(h => h !== null);
-    return hours.some(h => h >= 22) && hours.some(h => h < 6);
-}
-
-function parseDriverTimes(starts, ends) {
-    const hasMidnight = detectMidnightCrossing(starts, ends);
-    return starts.map((s, i) => {
-        const e = ends[i], sh = getHour(s);
-        let dayOff = (hasMidnight && sh !== null && sh < 6) ? 1 : 0;
-        let sm = parseTime(s), em = parseTime(e);
-        if (sm !== null) sm += dayOff * 1440;
-        if (em !== null) em += dayOff * 1440;
-        if (sm !== null && em !== null && em < sm && (em + 1440 - sm) <= 720) em += 1440;
-        return { startMin: sm, endMin: em };
-    });
-}
-
-function categorizeActivity(desc, isPT) {
-    if (isPT) return 'תח"צ';
-    const d = String(desc || '').toLowerCase();
-    if (d.includes('הכנת מכונה')) return 'הכנת מכונה';
-    if (d.includes('יציאה מחניון') || d.includes('חזרה לחניון') || d.includes('נסיעה ריקה')) return 'נסיעה ריקה';
-    if (d.includes('הפסקה')) return 'הפסקה';
-    if (d.includes('המתנה') || d.includes('standby')) return 'המתנה';
-    if (d.includes('לרשות')) return 'לרשות';
-    if (d.includes('תדלוק')) return 'אחר';
-    return 'אחר';
-}
-
-function analyzeExecution() {
-    const results = []; STATE.driverDetails = {};
-    const grouped = {};
-    
-    // קבלת ק"מ ידני או מתכנון
-    const manualKm = parseFloat(document.getElementById('manual-km')?.value) || 0;
-    const useKmSource = STATE.hasExecKm ? 'exec' : (manualKm > 0 ? 'manual' : (STATE.planPtKm > 0 ? 'plan' : 'none'));
-    
-    STATE.execData.forEach(row => {
-        const date = row['תאריך ייחוס'] || '', driver = row['קוד נהג'];
-        if (!driver) return;
-        const key = `${date}|${driver}`;
-        if (!grouped[key]) grouped[key] = [];
-        grouped[key].push(row);
-    });
-    
-    let totalExecPtTrips = 0;
-    Object.values(grouped).forEach(rows => {
-        totalExecPtTrips += rows.filter(r => r['קו - מק"ט'] && r['קו - מק"ט'] !== '').length;
-    });
-    
-    Object.entries(grouped).forEach(([key, rows]) => {
-        const [date, driver] = key.split('|');
-        const starts = rows.map(r => r['שעת התחלה']), ends = rows.map(r => r['שעת סיום']);
-        const parsedTimes = parseDriverTimes(starts, ends);
-        const activities = [], breakdown = {};
-        let ptMinutes = 0, ptKm = 0, tripCount = 0;
         
-        // איסוף קודי סידורים ייחודיים
-        const dutyIds = [...new Set(rows.map(r => r['קוד סידור תכנון']).filter(d => d && !isNaN(d)))];
-        
-        rows.forEach((row, i) => {
-            const isPT = row['קו - מק"ט'] && row['קו - מק"ט'] !== '';
-            const { startMin, endMin } = parsedTimes[i];
-            const duration = (startMin !== null && endMin !== null && endMin > startMin) ? endMin - startMin : 0;
-            const category = categorizeActivity(row['תאור'], isPT);
+        <!-- Deadhead Catalog Upload -->
+        <div class="section">
+            <div class="section-title">🚐 קטלוג ריקות (אופציונלי)</div>
+            <div class="upload-zone" id="deadheadZone" onclick="document.getElementById('deadheadInput').click()" style="padding: 0.75rem;">
+                <input type="file" id="deadheadInput" accept=".csv">
+                <div style="font-size: 0.85rem;">📁 קובץ קטלוג ריקות</div>
+            </div>
+            <div id="deadheadFile" style="margin-top: 0.5rem;"></div>
+            <div id="catalogInfo" style="margin-top: 0.5rem; font-size: 0.8rem; color: var(--text-secondary);"></div>
+        </div>
+
+        <!-- Settings Section -->
+        <div class="section">
+            <div class="section-title collapsible" onclick="toggleCollapsible('settingsContent')">⚙️ הגדרות <span style="font-size: 0.75rem; color: var(--text-secondary);">(לחץ להרחבה)</span></div>
+            <div id="settingsContent" class="collapsible-content open">
+                <div class="settings-grid">
+                    <div class="setting-item">
+                        <label>יעד אי-ביצוע מקסימלי (%)</label>
+                        <input type="number" id="targetNE" value="2" min="0" max="100" step="0.5">
+                    </div>
+                    <div class="setting-item">
+                        <label>יעד אי-דיוק מקסימלי (%)</label>
+                        <input type="number" id="targetIN" value="3" min="0" max="100" step="0.5">
+                    </div>
+                    <div class="setting-item">
+                        <label>סף אי-ביצוע (דקות)</label>
+                        <input type="number" id="threshNE" value="20" min="1" max="60">
+                    </div>
+                    <div class="setting-item">
+                        <label>סף אי-דיוק (דקות)</label>
+                        <input type="number" id="threshIN" value="5" min="1" max="30">
+                    </div>
+                    <div class="setting-item">
+                        <label>סף חריגת ריקה (דקות)</label>
+                        <input type="number" id="threshDeadhead" value="5" min="1" max="30">
+                    </div>
+                    <div class="setting-item">
+                        <label>מק"טים להתעלם (בעיית GPS)</label>
+                        <input type="text" id="ignoreRouteIds" value="" placeholder="למשל: 36013,40013">
+                    </div>
+                    <div class="setting-item">
+                        <label>מק"טים עם זנב כבד (P95)</label>
+                        <input type="text" id="heavyTailRouteIds" value="" placeholder="למשל: 27013">
+                    </div>
+                </div>
+                
+                <div style="margin-top: 1rem;">
+                    <label style="font-size: 0.85rem; font-weight: 600;">📅 החרגת תאריכים:</label>
+                    <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem; flex-wrap: wrap; align-items: center;">
+                        <input type="date" id="excludeDateInput" style="padding: 0.35rem; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
+                        <button class="btn btn-secondary btn-sm" onclick="addExcludeDate()">➕ הוסף</button>
+                        <button class="btn btn-secondary btn-sm" onclick="clearExcludeDates()">🗑️ נקה</button>
+                    </div>
+                    
+                    <div class="holiday-section">
+                        <div class="holiday-section-title">🕎 חגים ישראליים:</div>
+                        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                            <button class="btn btn-warning btn-sm" onclick="addIsraeliHolidays(2024)">חגים 2024</button>
+                            <button class="btn btn-warning btn-sm" onclick="addIsraeliHolidays(2025)">חגים 2025</button>
+                            <button class="btn btn-warning btn-sm" onclick="addIsraeliHolidays(2026)">חגים 2026</button>
+                        </div>
+                    </div>
+                    
+                    <div class="holiday-section">
+                        <div class="holiday-section-title">🏖️ בין הזמנים:</div>
+                        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                            <button class="btn btn-secondary btn-sm" onclick="addBeinHazmanim(2024)">בין הזמנים 2024</button>
+                            <button class="btn btn-secondary btn-sm" onclick="addBeinHazmanim(2025)">בין הזמנים 2025</button>
+                            <button class="btn btn-secondary btn-sm" onclick="addBeinHazmanim(2026)">בין הזמנים 2026</button>
+                        </div>
+                    </div>
+                    
+                    <div class="holiday-section">
+                        <div class="holiday-section-title">🌙 חגים מוסלמיים:</div>
+                        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                            <button class="btn btn-muslim btn-sm" onclick="addAllMuslimHolidays(2024)">כל החגים 2024</button>
+                            <button class="btn btn-muslim btn-sm" onclick="addAllMuslimHolidays(2025)">כל החגים 2025</button>
+                            <button class="btn btn-muslim btn-sm" onclick="addAllMuslimHolidays(2026)">כל החגים 2026</button>
+                        </div>
+                    </div>
+                    
+                    <div class="date-chips" id="excludeDateChips"></div>
+                </div>
+                
+                <div style="margin-top: 0.75rem;">
+                    <label><input type="checkbox" id="excludeWeekends" checked> החרג שישי-שבת</label>
+                </div>
+            </div>
+        </div>
+
+        <!-- Analyze Button -->
+        <div style="text-align: center; margin: 1rem 0;">
+            <button class="btn btn-primary" onclick="analyze()" id="analyzeBtn" disabled style="font-size: 1.1rem; padding: 0.8rem 2rem;">
+                🔍 נתח נתונים
+            </button>
+        </div>
+        <div class="progress hidden" id="progressBar"><div class="progress-bar" style="width: 0%"></div></div>
+
+        <!-- Results Section -->
+        <div id="results" class="hidden">
+            <div class="stats-grid" id="summaryStats"></div>
             
-            // קריאת ק"מ מעמודה אם קיימת
-            let km = 0;
-            if (STATE.hasExecKm) {
-                const kmCol = Object.keys(row).find(c => c.includes('מרחק'));
-                km = parseFloat(row[kmCol]) || 0;
-                // סינון ק"מ חריג (מעל 200) - למעט אשכול נגב
-                if (!STATE.isNegev && km > MAX_TRIP_KM) {
-                    console.warn(`סינון ק"מ חריג: ${km} ק"מ בקו ${row['קו - מק"ט']}`);
-                    km = 0;
-                }
-            }
+            <div class="info-box">
+                <strong>📌 הגדרות:</strong>
+                • <span style="color: var(--accent-red);">אי-ביצוע</span>: ≥<span id="infoNE">20</span> דק' |
+                • <span style="color: var(--accent-yellow);">אי-דיוק</span>: <span id="infoIN">5</span>-<span id="infoNE2">20</span> דק' |
+                • <span style="color: var(--accent-purple);">תקנה 168</span>: הפסקה ≥30' או 2×15' לכל 4 שעות
+            </div>
             
-            activities.push({ startTime: row['שעת התחלה'], endTime: row['שעת סיום'], startMin, endMin, duration, isPT, category, line: row['קו - מק"ט'] || '', description: row['תאור'] || '', km, dutyId: row['קוד סידור תכנון'] });
-            if (!breakdown[category]) breakdown[category] = { minutes: 0, km: 0 };
-            breakdown[category].minutes += duration; breakdown[category].km += km;
-            if (isPT) { ptMinutes += duration; ptKm += km; tripCount++; }
-        });
-        
-        activities.sort((a, b) => (a.startMin || 0) - (b.startMin || 0));
-        const allTimes = parsedTimes.flatMap(t => [t.startMin, t.endMin]).filter(t => t !== null);
-        const workStart = Math.min(...allTimes), workEnd = Math.max(...allTimes);
-        
-        // ביצוע: זמן עבודה = max-min (כולל המתנות שלא מדווחות)
-        const totalMinutes = workEnd - workStart;
-        // שעות תשלום = זמן עבודה ללא הכנת מכונה
-        const machineMinutes = breakdown['הכנת מכונה']?.minutes || 0;
-        const paymentMinutes = totalMinutes - machineMinutes;
-        const nonPtMinutes = totalMinutes - ptMinutes;
-        
-        // חישוב ק"מ לפי מקור
-        let effectivePtKm = ptKm;
-        if (useKmSource === 'manual') {
-            effectivePtKm = (manualKm / totalExecPtTrips) * tripCount;
-        } else if (useKmSource === 'plan') {
-            effectivePtKm = (STATE.planPtKm / totalExecPtTrips) * tripCount;
-        }
-        
-        // דקות/ק"מ = שעות תשלום / ק"מ תח"צ
-        const minPerKm = effectivePtKm > 0 ? paymentMinutes / effectivePtKm : 0;
-        const ptPercent = totalMinutes > 0 ? (ptMinutes / totalMinutes) * 100 : 0;
-        let status = ptPercent >= 75 ? 'תקין' : ptPercent >= 65 ? 'נמוך' : 'חריג';
-        
-        // בדיקת שלמות סידור - האם כל הנסיעות של הסידור בוצעו
-        let dutyStatus = '';
-        if (dutyIds.length === 0) {
-            dutyStatus = 'ללא סידור';
-        } else if (dutyIds.length === 1) {
-            dutyStatus = 'מלא';
-            // בדיקה מול התכנון אם קיים
-            if (STATE.planData) {
-                const planDuty = STATE.planData.filter(r => parseInt(r['Duty id']) === parseInt(dutyIds[0]) && r['Event Type'] === 'service_trip');
-                const execTrips = activities.filter(a => a.isPT).length;
-                if (planDuty.length > 0 && execTrips < planDuty.length) {
-                    dutyStatus = `חלקי (${execTrips}/${planDuty.length})`;
-                }
-            }
-        } else {
-            dutyStatus = `${dutyIds.length} סידורים`;
-        }
-        
-        STATE.driverDetails[key] = { activities, breakdown, summary: { totalMinutes, ptMinutes, nonPtMinutes, ptKm: effectivePtKm, paymentMinutes }, dutyIds };
-        results.push({ date, driver: parseInt(driver), totalMinutes: Math.round(totalMinutes), paymentMinutes: Math.round(paymentMinutes), ptMinutes: Math.round(ptMinutes), nonPtMinutes: Math.round(nonPtMinutes), ptKm: Math.round(effectivePtKm * 100) / 100, minPerKm: Math.round(minPerKm * 100) / 100, ptPercent: Math.round(ptPercent * 10) / 10, status, tripCount, startTime: formatMinutes(workStart), endTime: formatMinutes(workEnd), breakdown, dutyIds, dutyStatus });
-    });
-    
-    // שמירת מקור ק"מ
-    STATE.kmSource = useKmSource;
-    
-    return results;
-}
+            <div class="info-box warning" id="routeIdInfo" style="display:none;">
+                <strong>⚠️ חשוב:</strong> התאמת נתונים מתבצעת לפי <strong>מק"ט קו (Route Id)</strong> ולא לפי מספר קו בלבד.
+                קו 13 בשרון עירוני (מק"ט 36013) שונה מקו 13 בשרון בינעירוני (מק"ט 27013).
+            </div>
 
-function analyzePlanning() {
-    if (!STATE.planData) return [];
-    const results = []; STATE.dutyDetails = {};
-    const grouped = {};
-    // Event types that count as "payment hours" (exclude sign_on and post_trip)
-    const paymentEvents = ['service_trip', 'deadhead', 'depot_pull_out', 'depot_pull_in', 'standby', 'split'];
-    STATE.planData.forEach(row => { const d = row['Duty id']; if (!d) return; if (!grouped[d]) grouped[d] = []; grouped[d].push(row); });
-    Object.entries(grouped).forEach(([dutyId, rows]) => {
-        const activities = [], breakdown = {}, allTimes = [];
-        let ptMinutes = 0, ptKm = 0, tripCount = 0, paymentMinutes = 0;
-        rows.forEach(row => {
-            const dayOff = parseInt(row['Day Offset']) || 0;
-            let sm = parseTime(row['Start Time']), em = parseTime(row['End Time']);
-            if (sm !== null) sm += dayOff * 1440; if (em !== null) em += dayOff * 1440;
-            if (sm !== null && em !== null && em < sm && (em + 1440 - sm) <= 720) em += 1440;
-            if (sm !== null) allTimes.push(sm); if (em !== null) allTimes.push(em);
-            const duration = (sm !== null && em !== null && em > sm) ? em - sm : 0;
-            const et = row['Event Type'] || '', isPT = et === 'service_trip';
-            let km = parseFloat(row['Distance']) || 0;
-            // סינון ק"מ חריג (מעל 200) - למעט אשכול נגב
-            if (!STATE.isNegev && km > MAX_TRIP_KM) {
-                console.warn(`סינון ק"מ חריג בתכנון: ${km} ק"מ בקו ${row['Route Id']}`);
-                km = 0;
-            }
-            let category = 'אחר';
-            if (isPT) category = 'תח"צ';
-            else if (et === 'deadhead' || et === 'depot_pull_out' || et === 'depot_pull_in') category = 'נסיעה ריקה';
-            else if (et === 'standby') category = 'המתנה';
-            else if (et === 'sign_on' || et === 'post_trip') category = 'הכנת מכונה';
-            else if (et === 'split') category = 'הפסקה';
-            activities.push({ startTime: row['Start Time'], endTime: row['End Time'], startMin: sm, endMin: em, duration, isPT, category, eventType: et, routeId: row['Route Id'] || '', km, sign: row['Sign'] || '', origin: row['Origin Stop Name'] || '', destination: row['Destination Stop Name'] || '' });
-            if (!breakdown[category]) breakdown[category] = { minutes: 0, km: 0 };
-            breakdown[category].minutes += duration; breakdown[category].km += km;
-            if (isPT) { ptMinutes += duration; ptKm += km; tripCount++; }
-            // שעות תשלום - ללא sign_on ו-post_trip
-            if (paymentEvents.includes(et)) paymentMinutes += duration;
-        });
-        activities.sort((a, b) => (a.startMin || 0) - (b.startMin || 0));
-        const dutyStart = Math.min(...allTimes), dutyEnd = Math.max(...allTimes), totalMinutes = dutyEnd - dutyStart;
-        // דקות/ק"מ = שעות תשלום / ק"מ תח"צ
-        const minPerKm = ptKm > 0 ? paymentMinutes / ptKm : 0, ptPercent = totalMinutes > 0 ? (ptMinutes / totalMinutes) * 100 : 0;
-        STATE.dutyDetails[dutyId] = { activities, breakdown, summary: { totalMinutes, ptMinutes, ptKm, paymentMinutes } };
-        results.push({ dutyId: parseInt(dutyId), totalMinutes: Math.round(totalMinutes), paymentMinutes: Math.round(paymentMinutes), ptMinutes: Math.round(ptMinutes), ptKm: Math.round(ptKm * 100) / 100, minPerKm: Math.round(minPerKm * 100) / 100, ptPercent: Math.round(ptPercent * 10) / 10, tripCount, breakdown });
-    });
-    return results;
-}
+            <div class="tabs">
+                <div class="tab active" onclick="showTab('trips')">📋 נסיעות</div>
+                <div class="tab" onclick="showTab('duties')">👤 סידורים (168)</div>
+                <div class="tab" onclick="showTab('routes')">🚌 קווים</div>
+                <div class="tab" onclick="showTab('deadheads')">🚐 ריקות</div>
+            </div>
 
-function analyzeGaps() {
-    const totalBreakdown = {}; let totalMinutes = 0, totalPtMinutes = 0, totalPtKm = 0, totalPaymentMinutes = 0;
-    STATE.execResults.forEach(r => {
-        totalMinutes += r.totalMinutes; totalPtMinutes += r.ptMinutes; totalPtKm += r.ptKm;
-        totalPaymentMinutes += r.paymentMinutes || r.totalMinutes;
-        Object.entries(r.breakdown || {}).forEach(([cat, data]) => {
-            if (!totalBreakdown[cat]) totalBreakdown[cat] = { minutes: 0, km: 0 };
-            totalBreakdown[cat].minutes += data.minutes; totalBreakdown[cat].km += data.km;
-        });
-    });
-    // חישוב דקות/ק"מ = שעות תשלום / ק"מ תח"צ
-    const execAvgMinKm = totalPtKm > 0 ? totalPaymentMinutes / totalPtKm : 0;
-    
-    let planAvgMinKm = 0, planPaymentMin = 0, planPtKm = 0;
-    if (STATE.planResults.length > 0) {
-        planPaymentMin = STATE.planResults.reduce((a, b) => a + (b.paymentMinutes !== undefined ? b.paymentMinutes : b.totalMinutes), 0);
-        planPtKm = STATE.planResults.reduce((a, b) => a + b.ptKm, 0);
-        planAvgMinKm = planPtKm > 0 ? planPaymentMin / planPtKm : 0;
+            <!-- Trips Tab -->
+            <div id="tripsTab" class="section">
+                <div class="filters">
+                    <select id="filterRouteId"><option value="">כל המק"טים</option></select>
+                    <select id="filterRoute"><option value="">כל הקווים</option></select>
+                    <select id="filterStatus">
+                        <option value="">כל הסטטוסים</option>
+                        <option value="fail_ne">חורג NE</option>
+                        <option value="fail_in">חורג IN</option>
+                        <option value="ok">תקין</option>
+                        <option value="no_data">אין נתונים</option>
+                    </select>
+                    <select id="filterRec">
+                        <option value="">כל ההמלצות</option>
+                        <option value="להעלות">להעלות</option>
+                        <option value="לבחון העלאה">לבחון העלאה</option>
+                        <option value="לשמור">לשמור</option>
+                    </select>
+                    <select id="filter168">
+                        <option value="">168 - הכל</option>
+                        <option value="plan_fail">תכנון ✗</option>
+                        <option value="actual_fail">אחוזון ✗</option>
+                    </select>
+                    <button class="btn btn-secondary btn-sm" onclick="exportTripsCSV()">📥 CSV</button>
+                </div>
+                <div class="table-wrapper">
+                    <table>
+                        <thead><tr>
+                            <th onclick="sortTrips('duty_id')">סידור</th>
+                            <th onclick="sortTrips('route_id')">מק"ט</th>
+                            <th onclick="sortTrips('route')">קו</th>
+                            <th onclick="sortTrips('direction')">כיוון</th>
+                            <th onclick="sortTrips('start_time')">יציאה</th>
+                            <th onclick="sortTrips('planned')">תכנון</th>
+                            <th onclick="sortTrips('dynamic_pct')">אחוזון</th>
+                            <th onclick="sortTrips('pct_value')">ערך</th>
+                            <th onclick="sortTrips('gap_to_next')">פער</th>
+                            <th onclick="sortTrips('prob_non_exec')" title="סיכוי במצב נוכחי">NE נוכחי</th>
+                            <th onclick="sortTrips('prob_non_exec_rec')" title="סיכוי אחרי אימוץ המלצה">NE אחרי</th>
+                            <th onclick="sortTrips('prob_inaccuracy')" title="סיכוי במצב נוכחי">IN נוכחי</th>
+                            <th>סטטוס</th>
+                            <th>המלצה</th>
+                            <th onclick="sortTrips('rec_duration')">הגדרה</th>
+                            <th>168 תכנון</th>
+                            <th>168 אחוזון</th>
+                        </tr></thead>
+                        <tbody id="tripsBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Duties Tab -->
+            <div id="dutiesTab" class="section hidden">
+                <div class="filters">
+                    <select id="filterDuty168">
+                        <option value="">כל הסידורים</option>
+                        <option value="both_ok">תכנון ✓ + אחוזון ✓</option>
+                        <option value="plan_ok_actual_fail">תכנון ✓ אבל אחוזון ✗</option>
+                        <option value="plan_fail">תכנון ✗</option>
+                    </select>
+                    <button class="btn btn-secondary btn-sm" onclick="exportDutiesCSV()">📥 CSV</button>
+                </div>
+                <div class="table-wrapper">
+                    <table>
+                        <thead><tr>
+                            <th onclick="sortDuties('duty_id')">סידור</th>
+                            <th>התחלה</th>
+                            <th>סיום</th>
+                            <th onclick="sortDuties('total_duration')">משך</th>
+                            <th onclick="sortDuties('plan_compliant')">168 תכנון</th>
+                            <th onclick="sortDuties('actual_compliant')">168 אחוזון</th>
+                        </tr></thead>
+                        <tbody id="dutiesBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Routes Tab -->
+            <div id="routesTab" class="section hidden">
+                <div class="filters">
+                    <select id="filterRoutesRouteId"><option value="">כל המק"טים</option></select>
+                </div>
+                <div class="table-wrapper">
+                    <table>
+                        <thead><tr>
+                            <th onclick="sortRoutes('route_id')">מק"ט</th>
+                            <th onclick="sortRoutes('route')">קו</th>
+                            <th onclick="sortRoutes('trips')">נסיעות</th>
+                            <th onclick="sortRoutes('data_count')">נתונים</th>
+                            <th>אחוזון</th>
+                            <th onclick="sortRoutes('avg_non_exec')">אי-ביצוע</th>
+                            <th onclick="sortRoutes('avg_inaccuracy')">אי-דיוק</th>
+                            <th onclick="sortRoutes('daily_non_exec')" title="נוכחי → אחרי המלצה">צפי NE/יום</th>
+                            <th onclick="sortRoutes('rec_increase')">להעלות</th>
+                        </tr></thead>
+                        <tbody id="routesBody"></tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- Deadheads Tab -->
+            <div id="deadheadsTab" class="section hidden">
+                <div class="info-box">
+                    <strong>🚐 ניתוח ריקות:</strong> השוואה בין זמני ריקה במפה לקטלוג.<br>
+                    <span style="color: var(--accent-orange);">⚠️ חסר במפה</span> = המפה לא כוללת זמן ריקה |
+                    <span style="color: var(--accent-red);">LONG</span> = מפה > קטלוג |
+                    <span style="color: var(--accent-yellow);">SHORT</span> = מפה < קטלוג |
+                    <span style="color: var(--accent-green);">OK</span> = תקין |
+                    <span style="color: var(--accent-purple);">חסר בקטלוג</span> = אין בקטלוג
+                </div>
+                <div class="filters">
+                    <select id="filterDeadheadStatus">
+                        <option value="">כל הסטטוסים</option>
+                        <option value="map_zero">⚠️ חסר במפה</option>
+                        <option value="catalog_missing">חסר בקטלוג</option>
+                        <option value="long">LONG - מפה ארוך</option>
+                        <option value="short">SHORT - מפה קצר</option>
+                        <option value="ok">OK - תקין</option>
+                    </select>
+                    <select id="filterDeadheadSeason">
+                        <option value="">כל העונות</option>
+                        <option value="morning_peak">שיא בוקר</option>
+                        <option value="midday">שפל יום</option>
+                        <option value="afternoon_peak">שיא צהריים</option>
+                        <option value="evening">ערב</option>
+                        <option value="night">לילה</option>
+                    </select>
+                    <button class="btn btn-secondary btn-sm" onclick="exportDeadheadsCSV()">📥 CSV</button>
+                </div>
+                <div id="deadheadsSummary" class="stats-grid" style="margin-bottom: 1rem;"></div>
+                <div class="table-wrapper">
+                    <table>
+                        <thead><tr>
+                            <th onclick="sortDeadheads('duty_id')">סידור</th>
+                            <th onclick="sortDeadheads('start_time')">שעה</th>
+                            <th>עונה</th>
+                            <th>מוצא</th>
+                            <th>יעד</th>
+                            <th onclick="sortDeadheads('map_duration')">מפה (דק')</th>
+                            <th onclick="sortDeadheads('catalog_duration')">קטלוג (דק')</th>
+                            <th onclick="sortDeadheads('diff')">פער</th>
+                            <th>סטטוס</th>
+                        </tr></thead>
+                        <tbody id="deadheadsBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer style="text-align: center; padding: 2rem 1rem; color: var(--text-secondary); font-size: 0.75rem; border-top: 1px solid var(--border-color); margin-top: 2rem;">
+        <p>כלי ניתוח מפות תנועה | גרסה 3.5</p>
+        <p>התאמה לפי מק"ט קו • אחוזון דינמי • תקנה 168</p>
+    </footer>
+
+    <script>
+    // === Holiday Data ===
+    function generateDateRange(startDate, endDate) {
+        const dates = [];
+        const current = new Date(startDate);
+        const end = new Date(endDate);
+        while (current <= end) {
+            dates.push(current.toISOString().split('T')[0]);
+            current.setDate(current.getDate() + 1);
+        }
+        return dates;
     }
     
-    return { summary: { execAvgMinKm, planAvgMinKm, gap: execAvgMinKm - planAvgMinKm, totalMinutes, totalPtMinutes, totalPtKm, nonPtMinutes: totalMinutes - totalPtMinutes, execPaymentMin: totalPaymentMinutes, planPaymentMin }, breakdown: totalBreakdown, lowDrivers: STATE.execResults.filter(r => r.ptPercent < 75) };
-}
-
-function runAnalysis() {
-    STATE.execResults = analyzeExecution(); STATE.planResults = analyzePlanning(); STATE.gaps = analyzeGaps();
-    updateKPIs(); renderTables(); renderGapsDetailed();
-    document.getElementById('upload-section').classList.add('hidden'); document.getElementById('results-section').classList.remove('hidden');
-    document.getElementById('analysis-date').textContent = new Date().toLocaleDateString('he-IL') + ' ' + new Date().toLocaleTimeString('he-IL');
-}
-
-function updateKPIs() {
-    // חישוב דקות/ק"מ = שעות תשלום / ק"מ תח"צ
-    const totalPaymentMin = STATE.execResults.reduce((a, b) => a + (b.paymentMinutes || b.totalMinutes), 0);
-    const totalPtKm = STATE.execResults.reduce((a, b) => a + b.ptKm, 0);
-    const execAvgMinKm = totalPtKm > 0 ? totalPaymentMin / totalPtKm : 0;
-    const execAvgPt = STATE.execResults.reduce((a, b) => a + b.ptPercent, 0) / STATE.execResults.length || 0;
-    const lowCount = STATE.execResults.filter(r => r.ptPercent < 75).length;
-    document.getElementById('kpi-min-km').textContent = execAvgMinKm.toFixed(2);
-    document.getElementById('kpi-pt-km').textContent = totalPtKm.toLocaleString('he-IL');
-    document.getElementById('kpi-pt-pct').textContent = execAvgPt.toFixed(1) + '%';
-    document.getElementById('kpi-pt-pct').className = `stat-val ${execAvgPt >= 75 ? 'text-green-600' : 'text-red-500'}`;
-    document.getElementById('kpi-low-count').textContent = lowCount;
-    document.getElementById('kpi-low-sub').textContent = `מתוך ${STATE.execResults.length} נהגים`;
-    document.getElementById('kpi-total-drivers').textContent = STATE.execResults.length;
-    
-    // הוספת הערה על מקור ק"מ
-    let kmSourceNote = '';
-    if (STATE.kmSource === 'plan') kmSourceNote = '<div class="text-xs text-amber-600 mt-1"><i class="fas fa-info-circle"></i> ק"מ מתכנון</div>';
-    else if (STATE.kmSource === 'manual') kmSourceNote = '<div class="text-xs text-amber-600 mt-1"><i class="fas fa-info-circle"></i> ק"מ ידני</div>';
-    else if (STATE.kmSource === 'none') kmSourceNote = '<div class="text-xs text-red-500 mt-1"><i class="fas fa-exclamation-triangle"></i> אין נתוני ק"מ</div>';
-    
-    if (STATE.planResults.length > 0) {
-        // לתכנון: שימוש ב-paymentMinutes (ללא sign_on/post_trip)
-        const planPaymentMin = STATE.planResults.reduce((a, b) => a + (b.paymentMinutes !== undefined ? b.paymentMinutes : b.totalMinutes), 0);
-        const planTotalPtKm = STATE.planResults.reduce((a, b) => a + b.ptKm, 0);
-        const planAvgMinKm = planTotalPtKm > 0 ? planPaymentMin / planTotalPtKm : 0;
-        const planAvgPt = STATE.planResults.reduce((a, b) => a + b.ptPercent, 0) / STATE.planResults.length;
-        document.getElementById('compare-min-km').innerHTML = `<div><div class="compare-label">תכנון</div><div class="compare-val">${planAvgMinKm.toFixed(2)}</div></div><div class="text-lg ${execAvgMinKm > planAvgMinKm ? 'text-red-500' : 'text-green-500'}">${execAvgMinKm > planAvgMinKm ? '↑' : '↓'} ${Math.abs(execAvgMinKm - planAvgMinKm).toFixed(2)}</div>${kmSourceNote}`;
-        document.getElementById('compare-pt-km').innerHTML = `<div><div class="compare-label">תכנון</div><div class="compare-val">${planTotalPtKm.toLocaleString('he-IL')}</div></div>`;
-        document.getElementById('compare-pt-pct').innerHTML = `<div><div class="compare-label">תכנון</div><div class="compare-val">${planAvgPt.toFixed(1)}%</div></div><div><div class="compare-label">יעד</div><div class="compare-val text-green-600">75%</div></div>`;
-    } else {
-        document.getElementById('compare-min-km').innerHTML = '<span class="text-slate-400 text-xs">אין תכנון</span>' + kmSourceNote;
-        document.getElementById('compare-pt-km').innerHTML = '';
-        document.getElementById('compare-pt-pct').innerHTML = `<div><div class="compare-label">יעד</div><div class="compare-val text-green-600">75%</div></div>`;
-    }
-    document.getElementById('badge-drivers').textContent = STATE.execResults.length;
-    document.getElementById('badge-low').textContent = lowCount;
-    document.getElementById('badge-planning').textContent = STATE.planResults.length;
-}
-
-function renderTables() {
-    document.querySelector('#table-drivers tbody').innerHTML = STATE.execResults.map(r => {
-        // עמודת סידורים - עם לחיצה לפרטים
-        let dutyCell = '';
-        if (r.dutyIds && r.dutyIds.length > 0) {
-            const dutyLinks = r.dutyIds.map(d => `<span class="clickable text-blue-600" onclick="showDutyDetail(${parseInt(d)})">${parseInt(d)}</span>`).join(', ');
-            const statusClass = r.dutyStatus === 'מלא' ? 'text-green-600' : r.dutyStatus.includes('חלקי') ? 'text-amber-600' : r.dutyIds.length > 1 ? 'text-purple-600' : '';
-            dutyCell = `<div>${dutyLinks}</div><div class="text-xs ${statusClass}">${r.dutyStatus}</div>`;
-        } else {
-            dutyCell = '<span class="text-slate-400">-</span>';
-        }
-        return `<tr><td>${r.date}</td><td class="font-bold clickable" onclick="showDriverDetail('${r.date}', ${r.driver})">${r.driver}</td><td>${dutyCell}</td><td class="font-mono text-xs">${r.startTime}</td><td class="font-mono text-xs">${r.endTime}</td><td>${r.totalMinutes}</td><td>${r.ptMinutes}</td><td>${r.ptKm}</td><td class="font-bold">${r.minPerKm}</td><td class="font-bold ${r.ptPercent >= 75 ? 'text-green-600' : 'text-red-500'}">${r.ptPercent}%</td><td><span class="${r.status === 'תקין' ? 'status-ok' : r.status === 'נמוך' ? 'status-warn' : 'status-bad'}">${r.status}</span></td></tr>`;
-    }).join('');
-    document.querySelector('#table-low tbody').innerHTML = STATE.execResults.filter(r => r.ptPercent < 75).map(r => `<tr><td>${r.date}</td><td class="font-bold clickable" onclick="showDriverDetail('${r.date}', ${r.driver})">${r.driver}</td><td class="font-mono text-xs">${r.startTime}</td><td class="font-mono text-xs">${r.endTime}</td><td>${r.totalMinutes}</td><td>${r.ptMinutes}</td><td class="font-bold text-red-500">${r.ptPercent}%</td><td class="font-bold text-red-600">-${(75 - r.ptPercent).toFixed(1)}%</td></tr>`).join('');
-    document.querySelector('#table-planning tbody').innerHTML = STATE.planResults.map(r => `<tr><td class="font-bold clickable" onclick="showDutyDetail(${r.dutyId})">${r.dutyId}</td><td>${r.totalMinutes}</td><td>${r.ptMinutes}</td><td>${r.ptKm}</td><td class="font-bold">${r.minPerKm}</td><td>${r.ptPercent}%</td><td>${r.tripCount}</td></tr>`).join('');
-}
-
-function renderGapsDetailed() {
-    const gaps = STATE.gaps, c = document.getElementById('gaps-container');
-    
-    // Build planning breakdown
-    const planBreakdown = {};
-    let planTotalMin = 0, planTotalKm = 0;
-    STATE.planResults.forEach(r => {
-        Object.entries(r.breakdown || {}).forEach(([cat, data]) => {
-            if (!planBreakdown[cat]) planBreakdown[cat] = { minutes: 0, km: 0 };
-            planBreakdown[cat].minutes += data.minutes;
-            planBreakdown[cat].km += data.km;
-        });
-        planTotalMin += r.totalMinutes;
-    });
-    Object.values(planBreakdown).forEach(d => planTotalKm += d.km);
-    
-    // All categories
-    const allCats = [...new Set([...Object.keys(gaps.breakdown), ...Object.keys(planBreakdown)])];
-    
-    // Category descriptions
-    const catDesc = {
-        'תח"צ': 'נסיעות תחבורה ציבורית עם נוסעים (service_trip)',
-        'נסיעה ריקה': 'יציאה מחניון, חזרה לחניון, נסיעות ריקות בין קווים (deadhead, depot_pull)',
-        'הכנת מכונה': 'בדיקת רכב, sign_on, post_trip',
-        'המתנה': 'זמן המתנה בין נסיעות (standby)',
-        'הפסקה': 'הפסקות נהג (split)',
-        'לרשות': 'זמן לרשות סדרן - המתנה להקצאה',
-        'אחר': 'תדלוק, פעולות אחרות'
+    const ISRAELI_HOLIDAYS = {
+        2024: ['2024-04-23','2024-04-24','2024-04-25','2024-04-26','2024-04-27','2024-04-28','2024-04-29','2024-05-14','2024-05-26','2024-06-11','2024-06-12','2024-10-03','2024-10-04','2024-10-12','2024-10-17','2024-10-18','2024-10-19','2024-10-20','2024-10-21','2024-10-22','2024-10-23','2024-10-24'],
+        2025: ['2025-04-13','2025-04-14','2025-04-15','2025-04-16','2025-04-17','2025-04-18','2025-04-19','2025-05-01','2025-05-18','2025-06-02','2025-06-03','2025-09-23','2025-09-24','2025-10-02','2025-10-07','2025-10-08','2025-10-09','2025-10-10','2025-10-11','2025-10-12','2025-10-13','2025-10-14'],
+        2026: ['2026-04-02','2026-04-03','2026-04-04','2026-04-05','2026-04-06','2026-04-07','2026-04-08','2026-04-22','2026-05-07','2026-05-22','2026-05-23','2026-09-12','2026-09-13','2026-09-21','2026-09-26','2026-09-27','2026-09-28','2026-09-29','2026-09-30','2026-10-01','2026-10-02','2026-10-03']
     };
-    
-    const barHtml = Object.entries(gaps.breakdown).sort((a,b) => b[1].minutes - a[1].minutes).map(([cat, data]) => {
-        const pct = (data.minutes / gaps.summary.totalMinutes * 100).toFixed(1), color = CATEGORY_COLORS[cat] || '#64748b';
-        return `<div class="breakdown-segment" style="width:${pct}%; background:${color}" title="${cat}: ${Math.round(data.minutes)} דק">${pct > 5 ? pct + '%' : ''}</div>`;
-    }).join('');
-    
-    c.innerHTML = `
-        <div class="gap-card"><div class="gap-title"><i class="fas fa-chart-pie ml-2 text-blue-500"></i> סיכום דקות/ק"מ</div>
-        <div class="gap-breakdown"><div class="gap-item"><div class="gap-item-value text-blue-600">${gaps.summary.execAvgMinKm.toFixed(2)}</div><div class="gap-item-label">דק/ק"מ ביצוע</div></div>
-        ${STATE.planResults.length > 0 ? `<div class="gap-item"><div class="gap-item-value text-slate-600">${gaps.summary.planAvgMinKm.toFixed(2)}</div><div class="gap-item-label">דק/ק"מ תכנון</div></div><div class="gap-item"><div class="gap-item-value ${gaps.summary.gap > 0 ? 'text-red-500' : 'text-green-500'}">${gaps.summary.gap > 0 ? '+' : ''}${gaps.summary.gap.toFixed(2)}</div><div class="gap-item-label">פער</div></div>` : ''}</div></div>
-        
-        <!-- Comparison Table -->
-        ${STATE.planResults.length > 0 ? `
-        <div class="gap-card">
-            <div class="gap-title"><i class="fas fa-balance-scale ml-2 text-indigo-500"></i> השוואת תכנון מול ביצוע לפי קטגוריה</div>
-            <div class="overflow-x-auto">
-                <table class="w-full text-sm border-collapse">
-                    <thead>
-                        <tr class="bg-slate-100">
-                            <th class="p-3 text-right font-bold border-b-2">קטגוריה</th>
-                            <th colspan="3" class="p-3 text-center font-bold border-b-2 bg-blue-50">תכנון</th>
-                            <th colspan="3" class="p-3 text-center font-bold border-b-2 bg-green-50">ביצוע</th>
-                            <th colspan="3" class="p-3 text-center font-bold border-b-2 bg-amber-50">פער (ביצוע - תכנון)</th>
-                        </tr>
-                        <tr class="bg-slate-50 text-xs">
-                            <th class="p-2 text-right border-b"></th>
-                            <th class="p-2 text-center border-b bg-blue-50">דקות</th>
-                            <th class="p-2 text-center border-b bg-blue-50">ק"מ</th>
-                            <th class="p-2 text-center border-b bg-blue-50">%</th>
-                            <th class="p-2 text-center border-b bg-green-50">דקות</th>
-                            <th class="p-2 text-center border-b bg-green-50">ק"מ</th>
-                            <th class="p-2 text-center border-b bg-green-50">%</th>
-                            <th class="p-2 text-center border-b bg-amber-50">דקות</th>
-                            <th class="p-2 text-center border-b bg-amber-50">ק"מ</th>
-                            <th class="p-2 text-center border-b bg-amber-50">%</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${allCats.sort((a,b) => {
-                            const order = ['תח"צ', 'נסיעה ריקה', 'הכנת מכונה', 'המתנה', 'הפסקה', 'לרשות', 'אחר'];
-                            return order.indexOf(a) - order.indexOf(b);
-                        }).map(cat => {
-                            const plan = planBreakdown[cat] || { minutes: 0, km: 0 };
-                            const exec = gaps.breakdown[cat] || { minutes: 0, km: 0 };
-                            const planPct = planTotalMin > 0 ? (plan.minutes / planTotalMin * 100) : 0;
-                            const execPct = gaps.summary.totalMinutes > 0 ? (exec.minutes / gaps.summary.totalMinutes * 100) : 0;
-                            const diffMin = exec.minutes - plan.minutes;
-                            const diffKm = exec.km - plan.km;
-                            const diffPct = execPct - planPct;
-                            const color = CATEGORY_COLORS[cat] || '#64748b';
-                            return `
-                            <tr class="border-b hover:bg-slate-50">
-                                <td class="p-3 font-bold" style="border-right: 4px solid ${color}">
-                                    ${cat}
-                                    <div class="text-xs text-slate-400 font-normal">${catDesc[cat] || ''}</div>
-                                </td>
-                                <td class="p-2 text-center bg-blue-50/30">${Math.round(plan.minutes).toLocaleString()}</td>
-                                <td class="p-2 text-center bg-blue-50/30">${plan.km.toFixed(1)}</td>
-                                <td class="p-2 text-center bg-blue-50/30 font-bold">${planPct.toFixed(1)}%</td>
-                                <td class="p-2 text-center bg-green-50/30">${Math.round(exec.minutes).toLocaleString()}</td>
-                                <td class="p-2 text-center bg-green-50/30">${exec.km.toFixed(1)}</td>
-                                <td class="p-2 text-center bg-green-50/30 font-bold">${execPct.toFixed(1)}%</td>
-                                <td class="p-2 text-center bg-amber-50/30 font-bold ${diffMin > 0 ? 'text-red-600' : diffMin < 0 ? 'text-green-600' : ''}">${diffMin > 0 ? '+' : ''}${Math.round(diffMin).toLocaleString()}</td>
-                                <td class="p-2 text-center bg-amber-50/30 ${diffKm > 0 ? 'text-red-600' : diffKm < 0 ? 'text-green-600' : ''}">${diffKm > 0 ? '+' : ''}${diffKm.toFixed(1)}</td>
-                                <td class="p-2 text-center bg-amber-50/30 font-bold ${diffPct > 0 ? 'text-red-600' : diffPct < 0 ? 'text-green-600' : ''}">${diffPct > 0 ? '+' : ''}${diffPct.toFixed(1)}%</td>
-                            </tr>`;
-                        }).join('')}
-                        <tr class="bg-slate-200 font-bold">
-                            <td class="p-3">סה"כ</td>
-                            <td class="p-2 text-center">${Math.round(planTotalMin).toLocaleString()}</td>
-                            <td class="p-2 text-center">${Object.values(planBreakdown).reduce((a,b) => a + b.km, 0).toFixed(1)}</td>
-                            <td class="p-2 text-center">100%</td>
-                            <td class="p-2 text-center">${Math.round(gaps.summary.totalMinutes).toLocaleString()}</td>
-                            <td class="p-2 text-center">${Object.values(gaps.breakdown).reduce((a,b) => a + b.km, 0).toFixed(1)}</td>
-                            <td class="p-2 text-center">100%</td>
-                            <td class="p-2 text-center ${gaps.summary.totalMinutes - planTotalMin > 0 ? 'text-red-600' : 'text-green-600'}">${gaps.summary.totalMinutes - planTotalMin > 0 ? '+' : ''}${Math.round(gaps.summary.totalMinutes - planTotalMin).toLocaleString()}</td>
-                            <td class="p-2 text-center">-</td>
-                            <td class="p-2 text-center">-</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-            <div class="mt-4 p-3 bg-indigo-50 rounded-lg text-sm text-indigo-700">
-                <i class="fas fa-info-circle ml-1"></i> <strong>הסבר הקטגוריות:</strong><br>
-                <span class="text-xs">
-                • <strong>תח"צ</strong> - נסיעות שירות עם נוסעים<br>
-                • <strong>נסיעה ריקה</strong> - יציאה/חזרה מחניון, מעברים בין קווים<br>
-                • <strong>הכנת מכונה</strong> - בדיקות רכב בתחילת/סוף משמרת<br>
-                • <strong>המתנה</strong> - זמן המתנה מתוכנן בין נסיעות<br>
-                • <strong>הפסקה</strong> - הפסקות נהג<br>
-                • <strong>לרשות</strong> - זמן לרשות סדרן (ביצוע בלבד)<br>
-                • <strong>אחר</strong> - תדלוק, פעולות שונות
-                </span>
-            </div>
-        </div>
-        ` : ''}
-        
-        <div class="gap-card"><div class="gap-title"><i class="fas fa-clock ml-2 text-purple-500"></i> פילוח זמן ביצוע</div><div class="mb-4"><div class="breakdown-bar">${barHtml}</div></div>
-        <div class="gap-breakdown">${Object.entries(gaps.breakdown).sort((a,b) => b[1].minutes - a[1].minutes).map(([cat, data]) => {
-            const pct = (data.minutes / gaps.summary.totalMinutes * 100).toFixed(1), color = CATEGORY_COLORS[cat], hours = (data.minutes / 60).toFixed(1);
-            return `<div class="gap-item" style="border-right: 4px solid ${color}"><div class="gap-item-value" style="color:${color}">${Math.round(data.minutes)}</div><div class="gap-item-label">${cat}</div><div class="text-xs text-slate-500">${hours} שעות (${pct}%)</div></div>`;
-        }).join('')}</div></div>
-        
-        <div class="gap-card"><div class="gap-title"><i class="fas fa-exclamation-triangle ml-2 text-amber-500"></i> השפעה על דקות/ק"מ לפי קטגוריה</div>
-        <div class="space-y-3">${Object.entries(gaps.breakdown).filter(([cat]) => cat !== 'תח"צ').sort((a,b) => b[1].minutes - a[1].minutes).map(([cat, data]) => {
-            const color = CATEGORY_COLORS[cat], impact = gaps.summary.totalPtKm > 0 ? data.minutes / gaps.summary.totalPtKm : 0, pctNonPt = gaps.summary.nonPtMinutes > 0 ? (data.minutes / gaps.summary.nonPtMinutes * 100) : 0;
-            return `<div class="flex items-center gap-4 p-3 bg-slate-50 rounded-lg"><div class="w-3 h-3 rounded-full" style="background:${color}"></div><div class="flex-1"><div class="font-bold text-slate-700">${cat}</div><div class="text-xs text-slate-500">${Math.round(data.minutes)} דקות (${pctNonPt.toFixed(1)}% מזמן לא-תח"צ)</div></div><div class="text-left"><div class="font-bold text-lg" style="color:${color}">+${impact.toFixed(2)}</div><div class="text-xs text-slate-500">דק/ק"מ</div></div></div>`;
-        }).join('')}</div>
-        <div class="mt-4 p-3 bg-blue-50 rounded-lg text-sm text-blue-700"><i class="fas fa-lightbulb ml-1"></i> <strong>הסבר:</strong> כל קטגוריה מוסיפה לדקות/ק"מ את הזמן שלה חלקי סה"כ ק"מ תח"צ (${gaps.summary.totalPtKm.toFixed(0)} ק"מ).</div></div>
-        
-        <div class="gap-card"><div class="gap-title"><i class="fas fa-users ml-2 text-red-500"></i> נהגים מתחת 75% תח"צ</div>
-        <div class="gap-breakdown"><div class="gap-item"><div class="gap-item-value text-red-500">${gaps.lowDrivers.length}</div><div class="gap-item-label">נהגים</div></div>
-        <div class="gap-item"><div class="gap-item-value text-slate-600">${gaps.lowDrivers.length > 0 ? (gaps.lowDrivers.reduce((a,b) => a + b.ptPercent, 0) / gaps.lowDrivers.length).toFixed(1) : 0}%</div><div class="gap-item-label">ממוצע % תח"צ</div></div>
-        <div class="gap-item"><div class="gap-item-value text-amber-500">${gaps.lowDrivers.length > 0 ? (gaps.lowDrivers.reduce((a,b) => a + b.minPerKm, 0) / gaps.lowDrivers.length).toFixed(2) : 0}</div><div class="gap-item-label">ממוצע דק/ק"מ</div></div></div></div>`;
-}
+    const BEIN_HAZMANIM = { 2024: generateDateRange('2024-07-01', '2024-08-31'), 2025: generateDateRange('2025-07-01', '2025-08-31'), 2026: generateDateRange('2026-07-01', '2026-08-31') };
+    const RAMADAN = { 2024: generateDateRange('2024-03-10', '2024-04-09'), 2025: generateDateRange('2025-02-28', '2025-03-29'), 2026: generateDateRange('2026-02-17', '2026-03-18') };
+    const EID_FITR = { 2024: ['2024-04-10','2024-04-11','2024-04-12'], 2025: ['2025-03-30','2025-03-31','2025-04-01'], 2026: ['2026-03-19','2026-03-20','2026-03-21'] };
+    const EID_ADHA = { 2024: ['2024-06-16','2024-06-17','2024-06-18','2024-06-19'], 2025: ['2025-06-06','2025-06-07','2025-06-08','2025-06-09'], 2026: ['2026-05-26','2026-05-27','2026-05-28','2026-05-29'] };
 
-function showDriverDetail(date, driver) {
-    const d = STATE.driverDetails[`${date}|${driver}`]; if (!d) return;
-    document.getElementById('modal-title').innerHTML = `<i class="fas fa-user ml-2"></i> נהג ${driver} - ${date}`;
-    const barHtml = Object.entries(d.breakdown).sort((a,b) => b[1].minutes - a[1].minutes).map(([cat, data]) => {
-        const pct = (data.minutes / d.summary.totalMinutes * 100).toFixed(1), color = CATEGORY_COLORS[cat];
-        return `<div class="breakdown-segment" style="width:${pct}%; background:${color}" title="${cat}: ${Math.round(data.minutes)} דק">${pct > 8 ? cat : ''}</div>`;
-    }).join('');
-    
-    // פירוט פעילויות עם מספר סידור
-    const activitiesHtml = d.activities.map(a => {
-        const dutyId = a.dutyId && !isNaN(a.dutyId) ? parseInt(a.dutyId) : null;
-        const dutyCell = dutyId ? `<span class="clickable text-blue-600 text-xs" onclick="showDutyDetail(${dutyId})">${dutyId}</span>` : '<span class="text-slate-300">-</span>';
-        return `<div class="activity-row with-duty ${a.isPT ? 'activity-pt' : 'activity-non-pt'}"><div class="font-mono text-xs">${a.startTime} - ${a.endTime}</div><div><span class="inline-block w-2 h-2 rounded mr-1" style="background:${CATEGORY_COLORS[a.category]}"></span>${a.isPT ? `<strong>קו ${parseInt(a.line)}</strong> - ` : ''}${a.description || a.category}</div><div class="font-bold">${a.duration} דק</div><div>${a.km > 0 ? a.km.toFixed(1) : '-'}</div><div>${dutyCell}</div></div>`;
-    }).join('');
-    
-    document.getElementById('modal-body').innerHTML = `
-        <div class="grid grid-cols-4 gap-4 mb-6">
-            <div class="bg-blue-50 p-4 rounded-lg text-center"><div class="text-2xl font-bold text-blue-600">${d.summary.totalMinutes}</div><div class="text-xs text-slate-500">דקות כולל</div></div>
-            <div class="bg-green-50 p-4 rounded-lg text-center"><div class="text-2xl font-bold text-green-600">${d.summary.ptMinutes}</div><div class="text-xs text-slate-500">דקות תח"צ</div></div>
-            <div class="bg-amber-50 p-4 rounded-lg text-center"><div class="text-2xl font-bold text-amber-600">${d.summary.nonPtMinutes}</div><div class="text-xs text-slate-500">דקות לא-תח"צ</div></div>
-            <div class="bg-purple-50 p-4 rounded-lg text-center"><div class="text-2xl font-bold text-purple-600">${d.summary.ptKm.toFixed(1)}</div><div class="text-xs text-slate-500">ק"מ תח"צ</div></div>
-        </div>
-        <div class="mb-6"><div class="text-sm font-bold text-slate-700 mb-2">פילוח זמן</div><div class="breakdown-bar">${barHtml}</div>
-        <div class="flex flex-wrap gap-3 mt-2">${Object.entries(d.breakdown).sort((a,b) => b[1].minutes - a[1].minutes).map(([cat, data]) => `<div class="flex items-center gap-1 text-xs"><div class="w-3 h-3 rounded" style="background:${CATEGORY_COLORS[cat]}"></div><span>${cat}: ${Math.round(data.minutes)} דק (${(data.minutes / d.summary.totalMinutes * 100).toFixed(1)}%)</span></div>`).join('')}</div></div>
-        <div class="text-sm font-bold text-slate-700 mb-2">פירוט פעילויות</div>
-        <div class="border rounded-lg overflow-hidden"><div class="activity-row with-duty bg-slate-100 font-bold text-xs"><div>שעה</div><div>תיאור</div><div>משך</div><div>ק"מ</div><div>סידור</div></div>
-        <div style="max-height: 400px; overflow-y: auto;">${activitiesHtml}</div></div>`;
-    document.getElementById('detail-modal').classList.remove('hidden');
-}
+    // === State ===
+    let actualsData = [], mapData = [], tripsResults = [], dutiesResults = [], routesResults = [];
+    let deadheadCatalog = [], deadheadCatalogMap = {}, deadheadsResults = [];
+    let dutiesRawEvents = {};
+    let excludeDates = new Set();
+    let tripsSortCol = 'prob_non_exec', tripsSortDir = 'desc';
+    let deadheadsSortCol = 'status', deadheadsSortDir = 'asc';
+    let routesSortCol = 'avg_non_exec', routesSortDir = 'desc';
 
-function showDutyDetail(dutyId) {
-    const d = STATE.dutyDetails[dutyId]; 
-    if (!d) {
-        // אם הסידור לא נמצא בתכנון, הצג הודעה
-        document.getElementById('modal-title').innerHTML = `<i class="fas fa-clipboard-list ml-2"></i> סידור ${dutyId}`;
-        document.getElementById('modal-body').innerHTML = `<div class="text-center py-8 text-slate-500"><i class="fas fa-info-circle text-4xl mb-4"></i><p>סידור ${dutyId} לא נמצא בקובץ התכנון</p></div>`;
-        document.getElementById('detail-modal').classList.remove('hidden');
-        return;
+    // === Event Listeners ===
+    document.getElementById('actualsInput').addEventListener('change', handleActualsUpload);
+    document.getElementById('mapInput').addEventListener('change', handleMapUpload);
+    document.getElementById('deadheadInput').addEventListener('change', handleDeadheadCatalogUpload);
+
+    // === Holiday Functions ===
+    function addExcludeDate() {
+        const input = document.getElementById('excludeDateInput');
+        if (input.value) { excludeDates.add(input.value); renderExcludeDates(); input.value = ''; }
     }
-    document.getElementById('modal-title').innerHTML = `<i class="fas fa-clipboard-list ml-2"></i> סידור ${dutyId}`;
-    const barHtml = Object.entries(d.breakdown).sort((a,b) => b[1].minutes - a[1].minutes).map(([cat, data]) => {
-        const pct = (data.minutes / d.summary.totalMinutes * 100).toFixed(1), color = CATEGORY_COLORS[cat];
-        return `<div class="breakdown-segment" style="width:${pct}%; background:${color}" title="${cat}: ${Math.round(data.minutes)} דק">${pct > 8 ? cat : ''}</div>`;
-    }).join('');
+    function addIsraeliHolidays(year) { if (ISRAELI_HOLIDAYS[year]) { ISRAELI_HOLIDAYS[year].forEach(d => excludeDates.add(d)); renderExcludeDates(); } }
+    function addBeinHazmanim(year) { if (BEIN_HAZMANIM[year]) { BEIN_HAZMANIM[year].forEach(d => excludeDates.add(d)); renderExcludeDates(); } }
+    function addAllMuslimHolidays(year) { 
+        if (RAMADAN[year]) RAMADAN[year].forEach(d => excludeDates.add(d));
+        if (EID_FITR[year]) EID_FITR[year].forEach(d => excludeDates.add(d));
+        if (EID_ADHA[year]) EID_ADHA[year].forEach(d => excludeDates.add(d));
+        renderExcludeDates(); 
+    }
+    function clearExcludeDates() { excludeDates.clear(); renderExcludeDates(); }
+    function removeExcludeDate(date) { excludeDates.delete(date); renderExcludeDates(); }
     
-    // פירוט אירועים עם תיאור מלא
-    const activitiesHtml = d.activities.map(a => {
-        let description = '';
-        if (a.isPT) {
-            // נסיעת תח"צ - הצג קו ומסלול
-            const lineNum = a.sign || (a.routeId ? a.routeId.split('-')[0] : '');
-            description = `<strong>קו ${lineNum}</strong>`;
-            if (a.origin && a.destination) {
-                description += `<br><span class="text-xs text-slate-500">${a.origin} → ${a.destination}</span>`;
-            }
-        } else if (a.eventType === 'deadhead' || a.eventType === 'depot_pull_out' || a.eventType === 'depot_pull_in') {
-            // נסיעה ריקה
-            const typeLabel = a.eventType === 'depot_pull_out' ? 'יציאה מחניון' : a.eventType === 'depot_pull_in' ? 'חזרה לחניון' : 'נסיעה ריקה';
-            description = `<strong>${typeLabel}</strong>`;
-            if (a.origin && a.destination && a.origin !== a.destination) {
-                description += `<br><span class="text-xs text-slate-500">${a.origin} → ${a.destination}</span>`;
-            }
-        } else {
-            // שאר האירועים
-            const labels = { 'sign_on': 'הכנת מכונה', 'post_trip': 'סיום', 'standby': 'המתנה', 'split': 'הפסקה' };
-            description = `<strong>${labels[a.eventType] || a.eventType}</strong>`;
-            if (a.origin) description += `<br><span class="text-xs text-slate-500">${a.origin}</span>`;
+    function renderExcludeDates() {
+        const sorted = [...excludeDates].sort();
+        const count = sorted.length;
+        if (count === 0) {
+            document.getElementById('excludeDateChips').innerHTML = '<span style="color: var(--text-secondary); font-size: 0.8rem;">לא נבחרו תאריכים</span>';
+            return;
         }
-        return `<div class="activity-row ${a.isPT ? 'activity-pt' : 'activity-non-pt'}"><div class="font-mono text-xs">${a.startTime} - ${a.endTime}</div><div><span class="inline-block w-2 h-2 rounded mr-1" style="background:${CATEGORY_COLORS[a.category]}"></span>${description}</div><div class="font-bold">${a.duration} דק</div><div>${a.km > 0 ? a.km.toFixed(1) : '-'}</div></div>`;
-    }).join('');
-    
-    document.getElementById('modal-body').innerHTML = `
-        <div class="grid grid-cols-3 gap-4 mb-6">
-            <div class="bg-blue-50 p-4 rounded-lg text-center"><div class="text-2xl font-bold text-blue-600">${d.summary.totalMinutes}</div><div class="text-xs text-slate-500">דקות כולל</div></div>
-            <div class="bg-green-50 p-4 rounded-lg text-center"><div class="text-2xl font-bold text-green-600">${d.summary.ptMinutes}</div><div class="text-xs text-slate-500">דקות תח"צ</div></div>
-            <div class="bg-purple-50 p-4 rounded-lg text-center"><div class="text-2xl font-bold text-purple-600">${d.summary.ptKm.toFixed(1)}</div><div class="text-xs text-slate-500">ק"מ תח"צ</div></div>
-        </div>
-        <div class="mb-6"><div class="text-sm font-bold text-slate-700 mb-2">פילוח זמן</div><div class="breakdown-bar">${barHtml}</div>
-        <div class="flex flex-wrap gap-3 mt-2">${Object.entries(d.breakdown).sort((a,b) => b[1].minutes - a[1].minutes).map(([cat, data]) => `<div class="flex items-center gap-1 text-xs"><div class="w-3 h-3 rounded" style="background:${CATEGORY_COLORS[cat]}"></div><span>${cat}: ${Math.round(data.minutes)} דק (${(data.minutes / d.summary.totalMinutes * 100).toFixed(1)}%)</span></div>`).join('')}</div></div>
-        <div class="text-sm font-bold text-slate-700 mb-2">פירוט אירועים</div>
-        <div class="border rounded-lg overflow-hidden"><div class="activity-row bg-slate-100 font-bold text-xs"><div>שעה</div><div>תיאור</div><div>משך</div><div>ק"מ</div></div>
-        ${activitiesHtml}</div>`;
-    document.getElementById('detail-modal').classList.remove('hidden');
-}
+        let html = `<div style="width: 100%; margin-bottom: 0.3rem; font-size: 0.8rem; color: var(--text-secondary);">📅 ${count} תאריכים מוחרגים</div>`;
+        if (count > 15) {
+            html += sorted.slice(0, 8).map(d => `<span class="chip"><span class="chip-remove" onclick="removeExcludeDate('${d}')">✕</span>${new Date(d).toLocaleDateString('he-IL')}</span>`).join('');
+            html += `<span style="padding: 0.3rem; color: var(--text-secondary);">... ${count - 13} נוספים ...</span>`;
+            html += sorted.slice(-5).map(d => `<span class="chip"><span class="chip-remove" onclick="removeExcludeDate('${d}')">✕</span>${new Date(d).toLocaleDateString('he-IL')}</span>`).join('');
+        } else {
+            html += sorted.map(d => `<span class="chip"><span class="chip-remove" onclick="removeExcludeDate('${d}')">✕</span>${new Date(d).toLocaleDateString('he-IL')}</span>`).join('');
+        }
+        document.getElementById('excludeDateChips').innerHTML = html;
+    }
 
-function closeModal() { document.getElementById('detail-modal').classList.add('hidden'); }
-function showTab(id, btn) { document.querySelectorAll('.view').forEach(v => v.classList.add('hidden')); document.getElementById('view-' + id).classList.remove('hidden'); document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); }
-function filterTable() { const v = document.getElementById('search').value.toLowerCase(); document.querySelectorAll('tbody tr').forEach(r => r.style.display = r.innerText.toLowerCase().includes(v) ? '' : 'none'); }
-function resetAnalysis() { STATE = { execData: null, planData: null, execResults: [], planResults: [], gaps: [], driverDetails: {}, dutyDetails: {}, hasExecKm: false, planPtKm: 0, isNegev: false }; ['exec','plan'].forEach(t => { document.getElementById(t+'-zone').classList.remove('has-file'); document.getElementById(t+'-filename').textContent = ''; document.getElementById(t+'-file').value = ''; }); document.getElementById('results-section').classList.add('hidden'); document.getElementById('upload-section').classList.remove('hidden'); document.getElementById('manual-km-section').classList.add('hidden'); if(document.getElementById('manual-km')) document.getElementById('manual-km').value = ''; updateAnalyzeButton(); }
+    // === File Upload Handlers ===
+    async function handleDeadheadCatalogUpload(e) {
+        const file = e.target.files[0];
+        if (file) {
+            document.getElementById('deadheadZone').classList.add('has-files');
+            document.getElementById('deadheadFile').innerHTML = `<span class="chip">📄 ${file.name}</span>`;
+            const text = await file.text();
+            deadheadCatalog = parseCSV(text);
+            
+            deadheadCatalogMap = {};
+            let validEntries = 0;
+            for (const row of deadheadCatalog) {
+                const originId = row['Origin Stop Id'];
+                const destId = row['Destination Stop Id'];
+                const travelTime = parseFloat(row['Travel Time']);
+                if (originId && destId && !isNaN(travelTime)) {
+                    const key = `${originId}_${destId}`;
+                    if (!deadheadCatalogMap[key]) {
+                        deadheadCatalogMap[key] = { time: travelTime, count: 1 };
+                    } else {
+                        const existing = deadheadCatalogMap[key];
+                        existing.time = (existing.time * existing.count + travelTime) / (existing.count + 1);
+                        existing.count++;
+                    }
+                    validEntries++;
+                }
+            }
+            
+            const uniquePairs = Object.keys(deadheadCatalogMap).length;
+            document.getElementById('catalogInfo').innerHTML = `✅ נטענו ${validEntries} רשומות, ${uniquePairs} זוגות מוצא-יעד ייחודיים`;
+        }
+    }
 
-function exportExcel() {
-    const wb = XLSX.utils.book_new(), gaps = STATE.gaps;
+    async function handleActualsUpload(e) {
+        const files = e.target.files;
+        if (files.length > 0) {
+            document.getElementById('actualsZone').classList.add('has-files');
+            document.getElementById('actualsFiles').innerHTML = Array.from(files).map(f => `<span class="chip">📄 ${f.name}</span>`).join('');
+            actualsData = [];
+            for (const file of files) {
+                const text = await file.text();
+                actualsData = actualsData.concat(parseCSV(text));
+            }
+            checkReadyToAnalyze();
+        }
+    }
+
+    function handleMapUpload(e) {
+        const file = e.target.files[0];
+        if (file) {
+            document.getElementById('mapZone').classList.add('has-files');
+            document.getElementById('mapFile').innerHTML = `<span class="chip">📄 ${file.name}</span>`;
+            const reader = new FileReader();
+            reader.onload = (ev) => { mapData = parseCSV(ev.target.result); checkReadyToAnalyze(); };
+            reader.readAsText(file);
+        }
+    }
+
+    function parseCSV(text) {
+        const lines = text.split('\n').filter(l => l.trim());
+        if (lines.length < 2) return [];
+        let headerLine = lines[0];
+        if (headerLine.charCodeAt(0) === 0xFEFF) headerLine = headerLine.slice(1);
+        const headers = headerLine.split(',').map(h => h.trim().replace(/"/g, '').replace(/\r/g, ''));
+        return lines.slice(1).map(line => {
+            const values = line.split(',').map(v => v.trim().replace(/"/g, '').replace(/\r/g, ''));
+            const row = {};
+            headers.forEach((h, i) => row[h] = values[i] || '');
+            return row;
+        });
+    }
+
+    function checkReadyToAnalyze() {
+        document.getElementById('analyzeBtn').disabled = !(actualsData.length > 0 && mapData.length > 0);
+    }
+
+    // === Utility Functions ===
+    function toggleCollapsible(id) { document.getElementById(id).classList.toggle('open'); }
     
-    // Summary
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([{ 'מדד': 'דק/ק"מ ביצוע', 'ערך': gaps.summary.execAvgMinKm.toFixed(2) }, { 'מדד': 'דק/ק"מ תכנון', 'ערך': gaps.summary.planAvgMinKm.toFixed(2) }, { 'מדד': 'פער', 'ערך': gaps.summary.gap.toFixed(2) }, { 'מדד': 'נהגים מתחת 75%', 'ערך': gaps.lowDrivers.length }]), 'סיכום');
+    function showTab(tab) {
+        document.querySelectorAll('.tab').forEach((t, i) => {
+            t.classList.toggle('active', 
+                (tab==='trips'&&i===0)||(tab==='duties'&&i===1)||(tab==='routes'&&i===2)||(tab==='deadheads'&&i===3));
+        });
+        document.getElementById('tripsTab').classList.toggle('hidden', tab !== 'trips');
+        document.getElementById('dutiesTab').classList.toggle('hidden', tab !== 'duties');
+        document.getElementById('routesTab').classList.toggle('hidden', tab !== 'routes');
+        document.getElementById('deadheadsTab').classList.toggle('hidden', tab !== 'deadheads');
+    }
+
+    function timeToMinutes(t) { if (!t) return null; const p = t.toString().split(':'); return parseInt(p[0]) * 60 + parseInt(p[1]); }
+    function minutesToTime(m) { return `${Math.floor(m/60)%24}:${(m%60).toString().padStart(2,'0')}`; }
+    function parseDuration(d) { if (!d || d === '#') return null; const p = d.toString().split(':'); return p.length >= 2 ? parseInt(p[0])*60 + parseInt(p[1]) : null; }
     
-    // Comparison table - Planning vs Execution
-    if (STATE.planResults.length > 0) {
-        const planBreakdown = {};
-        let planTotalMin = 0;
-        STATE.planResults.forEach(r => {
-            Object.entries(r.breakdown || {}).forEach(([cat, data]) => {
-                if (!planBreakdown[cat]) planBreakdown[cat] = { minutes: 0, km: 0 };
-                planBreakdown[cat].minutes += data.minutes;
-                planBreakdown[cat].km += data.km;
+    function isExcludedDate(dateStr) {
+        if (!dateStr) return true;
+        try {
+            const p = dateStr.split('/');
+            const date = new Date(parseInt(p[2]), parseInt(p[1])-1, parseInt(p[0]));
+            if (excludeDates.has(date.toISOString().split('T')[0])) return true;
+            if (document.getElementById('excludeWeekends').checked && (date.getDay()===5||date.getDay()===6)) return true;
+        } catch(e) { return true; }
+        return false;
+    }
+
+    function getSeasonFromTime(minutes) {
+        const hour = Math.floor((minutes % 1440) / 60);
+        if (hour >= 6 && hour < 9) return { key: 'morning_peak', label: 'שיא בוקר' };
+        if (hour >= 9 && hour < 15) return { key: 'midday', label: 'שפל יום' };
+        if (hour >= 15 && hour < 19) return { key: 'afternoon_peak', label: 'שיא צהריים' };
+        if (hour >= 19 && hour < 23) return { key: 'evening', label: 'ערב' };
+        return { key: 'night', label: 'לילה' };
+    }
+
+    // *** KEY FIX: Use RouteId for percentile settings ***
+    function getDynamicPercentile(routeId, hour) {
+        const ignore = document.getElementById('ignoreRouteIds').value.split(',').map(r => r.trim()).filter(r => r);
+        const heavy = document.getElementById('heavyTailRouteIds').value.split(',').map(r => r.trim()).filter(r => r);
+        
+        const routeIdStr = String(routeId);
+        if (ignore.includes(routeIdStr)) return { pct: 0, label: 'GPS', ignore: true };
+        if (heavy.includes(routeIdStr)) return { pct: 95, label: 'P95', ignore: false };
+        
+        if (hour >= 6 && hour < 9) return { pct: 90, label: 'P90', ignore: false };
+        if (hour >= 9 && hour < 15) return { pct: 85, label: 'P85', ignore: false };
+        if (hour >= 15 && hour < 19) return { pct: 90, label: 'P90', ignore: false };
+        return { pct: 80, label: 'P80', ignore: false };
+    }
+
+    function percentile(arr, p) {
+        const s = [...arr].sort((a,b) => a-b);
+        const i = (p/100) * (s.length-1);
+        const l = Math.floor(i);
+        return l+1 < s.length ? s[l]*(1-(i-l)) + s[l+1]*(i-l) : s[l];
+    }
+
+    function logNormalCDF(x, mu, sigma) {
+        if (x <= 0) return 0;
+        return 0.5 * (1 + erf((Math.log(x) - mu) / (sigma * Math.sqrt(2))));
+    }
+    function erf(x) {
+        const a1=0.254829592,a2=-0.284496736,a3=1.421413741,a4=-1.453152027,a5=1.061405429,p=0.3275911;
+        const sign = x<0?-1:1; x=Math.abs(x);
+        const t=1/(1+p*x);
+        return sign*(1-(((((a5*t+a4)*t)+a3)*t+a2)*t+a1)*t*Math.exp(-x*x));
+    }
+    function fitLogNormal(data) {
+        if (data.length < 5) return null;
+        const log = data.filter(d => d>0).map(d => Math.log(d));
+        const mu = log.reduce((a,b) => a+b, 0) / log.length;
+        const sigma = Math.sqrt(log.reduce((a,b) => a + (b-mu)**2, 0) / log.length);
+        return { mu, sigma };
+    }
+
+    function checkRule168(events, useActual, tripDurations) {
+        const breakTypes = ['standby', 'break', 'meal_break', 'split'];
+        const workEvents = events.filter(e => e.eventType === 'service_trip' || e.eventType === 'deadhead' || breakTypes.includes(e.eventType));
+        const driving = workEvents.filter(e => e.eventType === 'service_trip' || e.eventType === 'deadhead');
+        if (driving.length === 0) return { compliant: true, segments: [], details: 'אין נהיגה' };
+        
+        const adjusted = workEvents.map(e => {
+            const start = timeToMinutes(e.startTime) + e.dayOffset * 1440;
+            let end = timeToMinutes(e.endTime) + e.dayOffset * 1440;
+            if (end < start) end += 1440;
+            if (useActual && e.eventType === 'service_trip') {
+                const key = `${e.routeId}-${e.direction}-${e.startTime}`;
+                if (tripDurations[key]) end = start + tripDurations[key];
+            }
+            return { ...e, start, end };
+        }).sort((a, b) => a.start - b.start);
+        
+        const drivingAdj = adjusted.filter(e => e.eventType === 'service_trip' || e.eventType === 'deadhead');
+        const firstDriveStart = drivingAdj[0].start;
+        const lastEnd = Math.max(...drivingAdj.map(e => e.end));
+        const totalDuration = lastEnd - firstDriveStart;
+        if (totalDuration < 240) return { compliant: true, segments: [], details: `< 4 שעות` };
+        
+        const segments = [];
+        let segStart = firstDriveStart;
+        let segNum = 1;
+        
+        while (segStart < lastEnd && segNum <= 10) {
+            const actualSegEnd = Math.min(segStart + 240, lastEnd);
+            const breaks = [];
+            adjusted.filter(e => breakTypes.includes(e.eventType)).forEach(e => {
+                if (e.end <= segStart || e.start >= actualSegEnd) return;
+                const overlap = Math.min(e.end, actualSegEnd) - Math.max(e.start, segStart);
+                if (overlap > 0) breaks.push({ overlap, full: e.end - e.start });
             });
-            planTotalMin += r.totalMinutes;
+            
+            const totalBreak = breaks.reduce((a, b) => a + b.overlap, 0);
+            const breaks15 = breaks.filter(b => b.overlap >= 15).length;
+            const has30 = breaks.some(b => b.full >= 30);
+            let isOk = has30 || (breaks15 >= 2 && totalBreak >= 30);
+            if (actualSegEnd - segStart < 180) isOk = true;
+            
+            segments.push({ num: segNum, isOk });
+            segStart += 240;
+            segNum++;
+        }
+        
+        const allOk = segments.every(s => s.isOk);
+        return { compliant: allOk, segments, details: allOk ? '✓' : `מקטעים: ${segments.filter(s => !s.isOk).map(s => s.num).join(',')}` };
+    }
+
+    // === Main Analysis ===
+    async function analyze() {
+        const btn = document.getElementById('analyzeBtn');
+        const progress = document.getElementById('progressBar');
+        btn.disabled = true; btn.textContent = '⏳ מנתח...';
+        progress.classList.remove('hidden');
+        
+        const targetNE = parseFloat(document.getElementById('targetNE').value);
+        const targetIN = parseFloat(document.getElementById('targetIN').value);
+        const threshNE = parseInt(document.getElementById('threshNE').value);
+        const threshIN = parseInt(document.getElementById('threshIN').value);
+        const threshDeadhead = parseInt(document.getElementById('threshDeadhead').value);
+        
+        document.getElementById('infoNE').textContent = threshNE;
+        document.getElementById('infoNE2').textContent = threshNE;
+        document.getElementById('infoIN').textContent = threshIN;
+
+        await new Promise(r => setTimeout(r, 10));
+        progress.querySelector('.progress-bar').style.width = '10%';
+
+        // === BUILD ACTUALS MAP ===
+        const filtered = actualsData.filter(row => !isExcludedDate(row.TripSourceDate));
+        const actualsMap = {};  // Key: RouteId-Direction-TimeBucket
+        const routeIdsInActuals = new Set();
+        
+        for (const row of filtered) {
+            const routeId = row.RouteId;
+            const dir = parseInt(row.Direction);
+            const time = timeToMinutes(row.TripSourceTime);
+            const dur = parseDuration(row.Duration);
+            
+            if (!routeId || isNaN(dir) || time === null || dur === null || dur <= 0 || dur > 180) continue;
+            
+            routeIdsInActuals.add(routeId);
+            const bucket = Math.round(time / 10) * 10;
+            const key = `${routeId}-${dir}-${bucket}`;
+            
+            if (!actualsMap[key]) actualsMap[key] = [];
+            actualsMap[key].push(dur);
+        }
+        
+        console.log(`📊 Actuals: ${filtered.length} valid records, ${routeIdsInActuals.size} unique RouteIds`);
+
+        await new Promise(r => setTimeout(r, 10));
+        progress.querySelector('.progress-bar').style.width = '30%';
+
+        // === PARSE MAP ===
+        const duties = {};
+        const routeIdsInMap = new Set();
+        
+        for (const row of mapData) {
+            const dutyId = row['Duty id'];
+            if (!dutyId) continue;
+            if (!duties[dutyId]) duties[dutyId] = [];
+            
+            // Extract numeric RouteId from format like "10236-1-0" → "10236"
+            let rawRouteId = row['Route Id'] || '';
+            let numericRouteId = rawRouteId ? rawRouteId.split('-')[0] : null;
+            
+            // Validate numericRouteId is actually numeric
+            if (numericRouteId && !/^\d+$/.test(numericRouteId)) {
+                numericRouteId = null;
+            }
+            
+            const eventType = row['Event Type'];
+            if (eventType === 'service_trip' && numericRouteId) {
+                routeIdsInMap.add(numericRouteId);
+            }
+            
+            duties[dutyId].push({
+                eventType: eventType,
+                routeId: numericRouteId,
+                rawRouteId: rawRouteId,
+                route: parseInt(row['Sign']) || null,
+                direction: parseInt(row['Direction']) || null,
+                startTime: row['Start Time'],
+                endTime: row['End Time'],
+                dayOffset: parseInt(row['Day Offset']) || 0,
+                originStopId: row['Origin Stop Id'],
+                destStopId: row['Destination Stop Id'],
+                originStopName: row['Origin Stop Name'] || row['Origin Stop Id'],
+                destStopName: row['Destination Stop Name'] || row['Destination Stop Id']
+            });
+        }
+        
+        // Check RouteId overlap
+        const matchedRouteIds = [...routeIdsInMap].filter(rid => routeIdsInActuals.has(rid));
+        const unmatchedRouteIds = [...routeIdsInMap].filter(rid => !routeIdsInActuals.has(rid));
+        console.log(`🗺️ Map: ${routeIdsInMap.size} RouteIds, ${matchedRouteIds.length} matched, ${unmatchedRouteIds.length} unmatched`);
+        if (unmatchedRouteIds.length > 0) {
+            console.warn(`⚠️ Unmatched RouteIds:`, unmatchedRouteIds.join(', '));
+        }
+
+        await new Promise(r => setTimeout(r, 10));
+        progress.querySelector('.progress-bar').style.width = '50%';
+
+        // Process trips and duties
+        tripsResults = [];
+        dutiesResults = [];
+        deadheadsResults = [];
+        dutiesRawEvents = {};
+        
+        let tripsWithData = 0, tripsWithoutData = 0, tripsPartialData = 0;
+        
+        for (const [dutyId, events] of Object.entries(duties)) {
+            events.sort((a, b) => (timeToMinutes(a.startTime) + a.dayOffset*1440) - (timeToMinutes(b.startTime) + b.dayOffset*1440));
+            dutiesRawEvents[dutyId] = events;
+
+            const plan168 = checkRule168(events, false, {});
+            const tripDurations = {};
+            const serviceTrips = events.filter(e => e.eventType === 'service_trip');
+            
+            // Process service trips
+            for (let i = 0; i < serviceTrips.length; i++) {
+                const trip = serviceTrips[i];
+                const startMin = timeToMinutes(trip.startTime) + trip.dayOffset * 1440;
+                let endMin = timeToMinutes(trip.endTime) + trip.dayOffset * 1440;
+                if (endMin < startMin) endMin += 1440;
+                const planned = endMin - startMin;
+                const hour = Math.floor((startMin % 1440) / 60);
+                
+                const nextTrip = serviceTrips[i + 1];
+                const isLast = !nextTrip;
+                let gapToNext = 0;
+                if (nextTrip) gapToNext = (timeToMinutes(nextTrip.startTime) + nextTrip.dayOffset * 1440) - startMin;
+                
+                const bucket = Math.round((startMin % 1440) / 10) * 10;
+                
+                // *** Use RouteId for matching actuals ***
+                const key = `${trip.routeId}-${trip.direction}-${bucket}`;
+                let durs = actualsMap[key] || [];
+                let matchSource = durs.length > 0 ? 'exact' : 'none';
+                
+                // If no data for this RouteId, try nearby time buckets
+                if (durs.length < 10) {
+                    const nearbyBuckets = [bucket - 10, bucket + 10, bucket - 20, bucket + 20];
+                    for (const nb of nearbyBuckets) {
+                        const nearbyKey = `${trip.routeId}-${trip.direction}-${nb}`;
+                        if (actualsMap[nearbyKey]) {
+                            durs = durs.concat(actualsMap[nearbyKey]);
+                            if (matchSource === 'none') matchSource = 'nearby';
+                        }
+                        if (durs.length >= 10) break;
+                    }
+                }
+                
+                // Track matching stats
+                if (durs.length >= 10) {
+                    tripsWithData++;
+                } else if (durs.length > 0) {
+                    tripsPartialData++;
+                } else {
+                    tripsWithoutData++;
+                }
+                
+                const noData = durs.length < 10;
+                const dataCount = durs.length;
+                const dynPct = getDynamicPercentile(trip.routeId, hour);
+                const pctValue = noData ? planned : (dynPct.ignore ? planned : percentile(durs, dynPct.pct));
+                tripDurations[`${trip.routeId}-${trip.direction}-${trip.startTime}`] = pctValue;
+                
+                let probNE = null, probIN = null;
+                let probNE_rec = null, probIN_rec = null;
+                let fit = null;
+                
+                if (!noData && !dynPct.ignore && gapToNext > 0) {
+                    fit = fitLogNormal(durs);
+                    if (fit) {
+                        probNE = (1 - logNormalCDF(gapToNext + threshNE, fit.mu, fit.sigma)) * 100;
+                        probIN = (logNormalCDF(gapToNext + threshNE, fit.mu, fit.sigma) - logNormalCDF(gapToNext + threshIN, fit.mu, fit.sigma)) * 100;
+                    }
+                } else if (dynPct.ignore) {
+                    probNE = 0; probIN = 0;
+                }
+                
+                // *** FIXED RECOMMENDATION LOGIC ***
+                let rec = noData ? 'אין נתונים' : 'לשמור';
+                let recDur = planned;
+                
+                if (!noData && !dynPct.ignore && gapToNext > 0 && probNE !== null) {
+                    if (probNE > targetNE) {
+                        // Only recommend increase if pctValue > planned
+                        if (pctValue > planned) {
+                            rec = 'להעלות';
+                            recDur = Math.ceil(pctValue);
+                        } else {
+                            // Plan is already higher than percentile
+                            rec = 'לבחון העלאה';
+                            recDur = planned;
+                        }
+                    } else if (probIN > targetIN) {
+                        if (pctValue > planned) {
+                            rec = 'לבחון העלאה';
+                            recDur = Math.ceil(pctValue);
+                        }
+                    }
+                }
+                
+                // Calculate probabilities after recommendation
+                if (fit && recDur !== planned) {
+                    const newGap = gapToNext + (recDur - planned);
+                    probNE_rec = (1 - logNormalCDF(newGap + threshNE, fit.mu, fit.sigma)) * 100;
+                    probIN_rec = (logNormalCDF(newGap + threshNE, fit.mu, fit.sigma) - logNormalCDF(newGap + threshIN, fit.mu, fit.sigma)) * 100;
+                } else {
+                    probNE_rec = probNE;
+                    probIN_rec = probIN;
+                }
+                
+                tripsResults.push({
+                    duty_id: dutyId, 
+                    route_id: trip.routeId,  // מק"ט קו
+                    route: trip.route,  // מספר קו
+                    direction: trip.direction, 
+                    start_time: trip.startTime, 
+                    hour, 
+                    planned,
+                    dynamic_pct: noData ? 'N/A' : dynPct.label, 
+                    pct_value: pctValue, 
+                    gap_to_next: gapToNext, 
+                    is_last: isLast,
+                    prob_non_exec: probNE, 
+                    prob_inaccuracy: probIN,
+                    prob_non_exec_rec: probNE_rec, 
+                    prob_inaccuracy_rec: probIN_rec,
+                    rec, 
+                    rec_duration: recDur, 
+                    is_ignored: dynPct.ignore, 
+                    no_data: noData,
+                    data_count: dataCount
+                });
+            }
+            
+            // Process deadheads
+            const deadheadEvents = events.filter(e => e.eventType === 'deadhead');
+            for (const dh of deadheadEvents) {
+                const startMin = timeToMinutes(dh.startTime) + dh.dayOffset * 1440;
+                let endMin = timeToMinutes(dh.endTime) + dh.dayOffset * 1440;
+                if (endMin < startMin) endMin += 1440;
+                const mapDuration = endMin - startMin;
+                
+                const season = getSeasonFromTime(startMin);
+                const catalogKey = `${dh.originStopId}_${dh.destStopId}`;
+                const catalogEntry = deadheadCatalogMap[catalogKey];
+                const catalogDuration = catalogEntry ? Math.round(catalogEntry.time) : null;
+                
+                let diff = null;
+                let status = 'catalog_missing';
+                let statusLabel = 'חסר בקטלוג';
+                
+                if (mapDuration === 0 && catalogDuration !== null) {
+                    status = 'map_zero';
+                    statusLabel = '⚠️ חסר במפה';
+                    diff = -catalogDuration;
+                } else if (mapDuration === 0 && catalogDuration === null) {
+                    status = 'catalog_missing';
+                    statusLabel = 'חסר בקטלוג';
+                } else if (catalogDuration !== null) {
+                    diff = mapDuration - catalogDuration;
+                    if (diff > threshDeadhead) {
+                        status = 'long'; statusLabel = 'LONG';
+                    } else if (diff < -threshDeadhead) {
+                        status = 'short'; statusLabel = 'SHORT';
+                    } else {
+                        status = 'ok'; statusLabel = 'OK';
+                    }
+                }
+                
+                deadheadsResults.push({
+                    duty_id: dutyId, start_time: dh.startTime, season_key: season.key, season_label: season.label,
+                    origin_id: dh.originStopId, dest_id: dh.destStopId, origin_name: dh.originStopName, dest_name: dh.destStopName,
+                    map_duration: mapDuration, catalog_duration: catalogDuration, diff: diff, status: status, status_label: statusLabel
+                });
+            }
+            
+            const actual168 = checkRule168(events, true, tripDurations);
+            
+            const firstDrive = events.find(e => e.eventType === 'service_trip');
+            const lastEvent = events[events.length - 1];
+            let totalDur = 0;
+            if (firstDrive && lastEvent) {
+                const s = timeToMinutes(firstDrive.startTime) + firstDrive.dayOffset * 1440;
+                let e = timeToMinutes(lastEvent.endTime) + lastEvent.dayOffset * 1440;
+                if (e < s) e += 1440;
+                totalDur = e - s;
+            }
+            
+            dutiesResults.push({
+                duty_id: dutyId, startTime: firstDrive?.startTime || '', endTime: lastEvent?.endTime || '',
+                total_duration: totalDur, plan_compliant: plan168.compliant, actual_compliant: actual168.compliant
+            });
+            
+            tripsResults.filter(t => t.duty_id === dutyId).forEach(t => {
+                t.duty_168_plan = plan168.compliant;
+                t.duty_168_actual = actual168.compliant;
+            });
+        }
+
+        await new Promise(r => setTimeout(r, 10));
+        progress.querySelector('.progress-bar').style.width = '80%';
+
+        // Routes summary - group by RouteId
+        routesResults = [];
+        const groups = {};
+        tripsResults.filter(t => !t.is_last && !t.no_data).forEach(t => {
+            const key = t.route_id || t.route;
+            if (!groups[key]) groups[key] = { route_id: t.route_id, route: t.route, trips: [] };
+            groups[key].trips.push(t);
         });
         
-        const allCats = [...new Set([...Object.keys(gaps.breakdown), ...Object.keys(planBreakdown)])];
-        const comparisonData = allCats.map(cat => {
-            const plan = planBreakdown[cat] || { minutes: 0, km: 0 };
-            const exec = gaps.breakdown[cat] || { minutes: 0, km: 0 };
-            const planPct = planTotalMin > 0 ? (plan.minutes / planTotalMin * 100) : 0;
-            const execPct = gaps.summary.totalMinutes > 0 ? (exec.minutes / gaps.summary.totalMinutes * 100) : 0;
-            return {
-                'קטגוריה': cat,
-                'תכנון_דקות': Math.round(plan.minutes),
-                'תכנון_קמ': plan.km.toFixed(1),
-                'תכנון_%': planPct.toFixed(1) + '%',
-                'ביצוע_דקות': Math.round(exec.minutes),
-                'ביצוע_קמ': exec.km.toFixed(1),
-                'ביצוע_%': execPct.toFixed(1) + '%',
-                'פער_דקות': Math.round(exec.minutes - plan.minutes),
-                'פער_קמ': (exec.km - plan.km).toFixed(1),
-                'פער_%': (execPct - planPct).toFixed(1) + '%'
-            };
+        for (const [key, group] of Object.entries(groups)) {
+            const trips = group.trips;
+            const dynPct = getDynamicPercentile(group.route_id, 12);
+            const validTrips = trips.filter(t => t.prob_non_exec !== null);
+            const avgDataCount = trips.reduce((a, t) => a + (t.data_count || 0), 0) / trips.length;
+            
+            routesResults.push({
+                route_id: group.route_id,
+                route: group.route,
+                trips: trips.length,
+                data_count: Math.round(avgDataCount),
+                pct_label: dynPct.ignore ? 'GPS' : dynPct.label,
+                avg_non_exec: validTrips.length > 0 ? validTrips.reduce((a,t) => a + (t.prob_non_exec || 0), 0) / validTrips.length : 0,
+                avg_inaccuracy: validTrips.length > 0 ? validTrips.reduce((a,t) => a + (t.prob_inaccuracy || 0), 0) / validTrips.length : 0,
+                daily_non_exec: validTrips.reduce((a,t) => a + (t.prob_non_exec || 0), 0) / 100,
+                daily_non_exec_rec: validTrips.reduce((a,t) => a + (t.prob_non_exec_rec || 0), 0) / 100,
+                rec_increase: trips.filter(t => t.rec === 'להעלות').length
+            });
+        }
+
+        progress.querySelector('.progress-bar').style.width = '100%';
+        
+        // === VALIDATION SUMMARY ===
+        console.log(`\n📈 Trip Matching Summary:`);
+        console.log(`   ✅ Full match (≥10 records): ${tripsWithData}`);
+        console.log(`   ⚠️ Partial match (<10 records): ${tripsPartialData}`);
+        console.log(`   ❌ No match: ${tripsWithoutData}`);
+        console.log(`   📊 Match rate: ${((tripsWithData / (tripsWithData + tripsPartialData + tripsWithoutData)) * 100).toFixed(1)}%`);
+        
+        // Show RouteId info box with validation details
+        const hasRouteIds = tripsResults.some(t => t.route_id);
+        const routeIdInfoEl = document.getElementById('routeIdInfo');
+        if (hasRouteIds) {
+            const matchRate = ((tripsWithData / (tripsWithData + tripsPartialData + tripsWithoutData)) * 100).toFixed(1);
+            
+            let warningClass = unmatchedRouteIds.length > 0 ? 'warning' : '';
+            let statusIcon = unmatchedRouteIds.length > 0 ? '⚠️' : '✅';
+            
+            routeIdInfoEl.className = `info-box ${warningClass}`;
+            routeIdInfoEl.style.display = 'block';
+            routeIdInfoEl.innerHTML = `
+                <strong>${statusIcon} סטטוס התאמת נתונים:</strong><br>
+                • מק"טים ב-Actuals: <strong>${routeIdsInActuals.size}</strong> |
+                • מק"טים במפה: <strong>${routeIdsInMap.size}</strong> |
+                • מק"טים מותאמים: <strong>${matchedRouteIds.length}</strong><br>
+                • נסיעות עם נתונים מלאים: <strong>${tripsWithData}</strong> |
+                • נסיעות עם נתונים חלקיים: <strong>${tripsPartialData}</strong> |
+                • נסיעות ללא נתונים: <strong>${tripsWithoutData}</strong> |
+                • אחוז התאמה: <strong>${matchRate}%</strong>
+                ${unmatchedRouteIds.length > 0 ? `<br><span style="color: var(--accent-yellow);">⚠️ ${unmatchedRouteIds.length} מק"טים במפה ללא נתונים ב-Actuals: ${unmatchedRouteIds.slice(0, 10).join(', ')}${unmatchedRouteIds.length > 10 ? '...' : ''}</span>` : ''}
+            `;
+        } else {
+            routeIdInfoEl.style.display = 'none';
+        }
+        
+        renderSummary(); renderTrips(); renderDuties(); renderRoutes(); renderDeadheads(); populateFilters();
+        document.getElementById('results').classList.remove('hidden');
+        progress.classList.add('hidden');
+        btn.disabled = false; btn.textContent = '🔍 נתח נתונים';
+    }
+
+    // === Render Functions ===
+    function renderSummary() {
+        const withData = tripsResults.filter(t => !t.no_data && !t.is_last);
+        const noDataCount = tripsResults.filter(t => t.no_data).length;
+        const targetNE = parseFloat(document.getElementById('targetNE').value);
+        const targetIN = parseFloat(document.getElementById('targetIN').value);
+        const totalTrips = withData.length;
+        
+        const failsNE = withData.filter(t => t.prob_non_exec !== null && t.prob_non_exec > targetNE).length;
+        const failsIN = withData.filter(t => t.prob_non_exec !== null && t.prob_non_exec <= targetNE && t.prob_inaccuracy > targetIN).length;
+        const failsNE_rec = withData.filter(t => t.prob_non_exec_rec !== null && t.prob_non_exec_rec > targetNE).length;
+        const failsIN_rec = withData.filter(t => t.prob_non_exec_rec !== null && t.prob_non_exec_rec <= targetNE && t.prob_inaccuracy_rec > targetIN).length;
+        
+        const pctNE = totalTrips > 0 ? (failsNE / totalTrips) * 100 : 0;
+        const pctIN = totalTrips > 0 ? (failsIN / totalTrips) * 100 : 0;
+        const pctNE_rec = totalTrips > 0 ? (failsNE_rec / totalTrips) * 100 : 0;
+        const pctIN_rec = totalTrips > 0 ? (failsIN_rec / totalTrips) * 100 : 0;
+        
+        const d168PlanFail = dutiesResults.filter(d => !d.plan_compliant).length;
+        const d168ActualFail = dutiesResults.filter(d => !d.actual_compliant).length;
+        
+        document.getElementById('summaryStats').innerHTML = `
+            <div class="stat-card"><div class="value blue">${tripsResults.length}</div><div class="label">נסיעות</div></div>
+            <div class="stat-card">
+                <div class="value ${pctNE > 2 ? 'red' : 'green'}">${pctNE.toFixed(2)}%</div>
+                <div class="label">אי-ביצוע (נוכחי)</div>
+                ${pctNE_rec < pctNE ? `<div class="sub">→ ${pctNE_rec.toFixed(2)}% אחרי המלצה</div>` : ''}
+                <div style="font-size:0.6rem;color:var(--text-secondary);">${failsNE} נסיעות חורגות</div>
+            </div>
+            <div class="stat-card">
+                <div class="value ${pctIN > 3 ? 'yellow' : 'green'}">${pctIN.toFixed(2)}%</div>
+                <div class="label">אי-דיוק (נוכחי)</div>
+                ${pctIN_rec < pctIN ? `<div class="sub">→ ${pctIN_rec.toFixed(2)}% אחרי המלצה</div>` : ''}
+                <div style="font-size:0.6rem;color:var(--text-secondary);">${failsIN} נסיעות חורגות</div>
+            </div>
+            <div class="stat-card"><div class="value ${noDataCount>0?'purple':'green'}">${noDataCount}</div><div class="label">אין נתונים</div></div>
+            <div class="stat-card"><div class="value ${d168PlanFail>0?'purple':'green'}">${d168PlanFail}</div><div class="label">168 תכנון ✗</div></div>
+            <div class="stat-card"><div class="value ${d168ActualFail>0?'red':'green'}">${d168ActualFail}</div><div class="label">168 אחוזון ✗</div></div>
+        `;
+    }
+
+    function renderTrips() {
+        const targetNE = parseFloat(document.getElementById('targetNE').value);
+        const targetIN = parseFloat(document.getElementById('targetIN').value);
+        const routeIdF = document.getElementById('filterRouteId').value;
+        const routeF = document.getElementById('filterRoute').value;
+        const statusF = document.getElementById('filterStatus').value;
+        const recF = document.getElementById('filterRec').value;
+        const f168 = document.getElementById('filter168').value;
+        
+        let filtered = tripsResults.filter(t => {
+            if (routeIdF && t.route_id != routeIdF) return false;
+            if (routeF && t.route != routeF) return false;
+            if (recF && t.rec !== recF) return false;
+            if (statusF === 'fail_ne' && (t.no_data || t.prob_non_exec <= targetNE)) return false;
+            if (statusF === 'fail_in' && (t.no_data || t.prob_non_exec > targetNE || t.prob_inaccuracy <= targetIN)) return false;
+            if (statusF === 'ok' && (t.no_data || t.prob_non_exec > targetNE || t.prob_inaccuracy > targetIN)) return false;
+            if (statusF === 'no_data' && !t.no_data) return false;
+            if (f168 === 'plan_fail' && t.duty_168_plan) return false;
+            if (f168 === 'actual_fail' && t.duty_168_actual) return false;
+            return true;
         });
-        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(comparisonData), 'השוואה_תכנון_ביצוע');
+        
+        filtered.sort((a,b) => {
+            let av = a[tripsSortCol] ?? -1, bv = b[tripsSortCol] ?? -1;
+            if (typeof av === 'string') return tripsSortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
+            return tripsSortDir === 'asc' ? av - bv : bv - av;
+        });
+        
+        document.getElementById('tripsBody').innerHTML = filtered.slice(0, 500).map(t => {
+            const neOk = t.no_data || t.prob_non_exec === null || t.prob_non_exec <= targetNE;
+            const inOk = t.no_data || t.prob_inaccuracy === null || t.prob_inaccuracy <= targetIN;
+            let status = t.no_data ? '<span class="badge badge-gray">N/A</span>' :
+                        t.is_ignored ? '<span class="badge badge-gray">GPS</span>' :
+                        !neOk ? '<span class="badge badge-red">NE</span>' :
+                        !inOk ? '<span class="badge badge-yellow">IN</span>' :
+                        '<span class="badge badge-green">✓</span>';
+            
+            const recClass = t.rec === 'להעלות' ? 'badge-red' : t.rec === 'לבחון העלאה' ? 'badge-yellow' : t.rec === 'אין נתונים' ? 'badge-gray' : 'badge-green';
+            const pctClass = t.dynamic_pct === 'N/A' ? 'badge-gray' : t.dynamic_pct === 'P95' ? 'badge-orange' : t.dynamic_pct === 'P90' ? 'badge-blue' : t.dynamic_pct === 'GPS' ? 'badge-gray' : 'badge-green';
+            
+            const probNEText = t.prob_non_exec === null ? '-' : t.prob_non_exec.toFixed(1) + '%';
+            const probNERecText = t.prob_non_exec_rec === null ? '-' : t.prob_non_exec_rec.toFixed(1) + '%';
+            const probINText = t.prob_inaccuracy === null ? '-' : t.prob_inaccuracy.toFixed(1) + '%';
+            const neRecImproved = t.prob_non_exec_rec !== null && t.prob_non_exec !== null && t.prob_non_exec_rec < t.prob_non_exec;
+            
+            return `<tr class="${!t.no_data && t.prob_non_exec > 5 ? 'highlight-row' : ''}">
+                <td>${t.duty_id}</td>
+                <td><span class="badge badge-cyan">${t.route_id || '-'}</span></td>
+                <td><strong>${t.route}</strong></td>
+                <td>${t.direction}</td><td>${t.start_time}</td><td>${t.planned}'</td>
+                <td><span class="badge ${pctClass}">${t.dynamic_pct}</span></td><td><strong>${t.pct_value.toFixed(0)}'</strong></td>
+                <td>${t.is_last ? '<span class="badge badge-blue">אחרון</span>' : t.gap_to_next + "'"}</td>
+                <td style="color:${!neOk&&!t.no_data?'var(--accent-red)':''}">${probNEText}</td>
+                <td style="color:${neRecImproved?'var(--accent-green)':''}">${probNERecText}</td>
+                <td style="color:${!inOk&&!t.no_data?'var(--accent-yellow)':''}">${probINText}</td>
+                <td>${status}</td><td><span class="badge ${recClass}">${t.rec}</span></td><td><strong>${t.rec_duration}'</strong></td>
+                <td>${t.duty_168_plan?'<span class="badge badge-green">✓</span>':'<span class="badge badge-purple">✗</span>'}</td>
+                <td>${t.duty_168_actual?'<span class="badge badge-green">✓</span>':'<span class="badge badge-red">✗</span>'}</td>
+            </tr>`;
+        }).join('');
+    }
+
+    function renderDuties() {
+        const f168 = document.getElementById('filterDuty168').value;
+        let filtered = dutiesResults.filter(d => {
+            if (f168 === 'both_ok' && (!d.plan_compliant || !d.actual_compliant)) return false;
+            if (f168 === 'plan_ok_actual_fail' && (!d.plan_compliant || d.actual_compliant)) return false;
+            if (f168 === 'plan_fail' && d.plan_compliant) return false;
+            return true;
+        });
+        
+        document.getElementById('dutiesBody').innerHTML = filtered.map(d => {
+            return `<tr>
+                <td><strong>${d.duty_id}</strong></td><td>${d.startTime}</td><td>${d.endTime}</td>
+                <td>${(d.total_duration/60).toFixed(1)}h</td>
+                <td>${d.plan_compliant?'<span class="badge badge-green">✓</span>':'<span class="badge badge-purple">✗</span>'}</td>
+                <td>${d.actual_compliant?'<span class="badge badge-green">✓</span>':'<span class="badge badge-red">✗</span>'}</td>
+            </tr>`;
+        }).join('');
+    }
+
+    function renderRoutes() {
+        const routeIdF = document.getElementById('filterRoutesRouteId').value;
+        
+        let filtered = routesResults.filter(r => {
+            if (routeIdF && r.route_id != routeIdF) return false;
+            return true;
+        });
+        
+        filtered.sort((a,b) => {
+            let av = a[routesSortCol] ?? 0, bv = b[routesSortCol] ?? 0;
+            return routesSortDir === 'asc' ? av - bv : bv - av;
+        });
+        
+        document.getElementById('routesBody').innerHTML = filtered.map(r => {
+            const neColor = r.avg_non_exec > 5 ? 'var(--accent-red)' : r.avg_non_exec > 2 ? 'var(--accent-yellow)' : 'var(--accent-green)';
+            const pctClass = r.pct_label === 'P95' ? 'badge-orange' : r.pct_label === 'GPS' ? 'badge-gray' : 'badge-blue';
+            const improved = r.daily_non_exec_rec < r.daily_non_exec;
+            const dailyText = improved ? 
+                `${r.daily_non_exec.toFixed(1)}<span style="color:var(--accent-green);font-size:0.7rem;"> →${r.daily_non_exec_rec.toFixed(1)}</span>` : 
+                r.daily_non_exec.toFixed(1);
+            return `<tr>
+                <td><span class="badge badge-cyan">${r.route_id || '-'}</span></td>
+                <td><strong>קו ${r.route}</strong></td>
+                <td>${r.trips}</td>
+                <td>${r.data_count}</td>
+                <td><span class="badge ${pctClass}">${r.pct_label}</span></td>
+                <td style="color:${neColor}">${r.avg_non_exec.toFixed(2)}%</td>
+                <td>${r.avg_inaccuracy.toFixed(2)}%</td>
+                <td>${dailyText}</td>
+                <td>${r.rec_increase}</td>
+            </tr>`;
+        }).join('');
     }
     
-    // Breakdown
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(Object.entries(gaps.breakdown).map(([c, d]) => ({ 'קטגוריה': c, 'דקות': Math.round(d.minutes), 'שעות': (d.minutes/60).toFixed(1), '%': (d.minutes/gaps.summary.totalMinutes*100).toFixed(1)+'%', 'תוספת_דק_קמ': (d.minutes/gaps.summary.totalPtKm).toFixed(2) }))), 'פילוח_ביצוע');
-    
-    // Drivers
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(STATE.execResults.map(r => ({ 'תאריך': r.date, 'נהג': r.driver, 'דקות_כולל': r.totalMinutes, 'דקות_תחצ': r.ptMinutes, 'קמ_תחצ': r.ptKm, 'דקות_לקמ': r.minPerKm, '%_תחצ': r.ptPercent, 'סטטוס': r.status }))), 'נהגים');
-    
-    // Low efficiency
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(gaps.lowDrivers.map(r => ({ 'תאריך': r.date, 'נהג': r.driver, 'דקות_כולל': r.totalMinutes, 'דקות_תחצ': r.ptMinutes, '%_תחצ': r.ptPercent, 'פער': (75-r.ptPercent).toFixed(1) }))), 'מתחת_75');
-    
-    // Planning
-    if (STATE.planResults.length > 0) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(STATE.planResults.map(r => ({ 'סידור': r.dutyId, 'דקות_כולל': r.totalMinutes, 'דקות_תחצ': r.ptMinutes, 'קמ_תחצ': r.ptKm, 'דקות_לקמ': r.minPerKm, '%_תחצ': r.ptPercent }))), 'תכנון');
-    
-    XLSX.writeFile(wb, 'efficiency_analysis.xlsx');
-}
+    function renderDeadheads() {
+        const statusF = document.getElementById('filterDeadheadStatus').value;
+        const seasonF = document.getElementById('filterDeadheadSeason').value;
+        
+        let filtered = deadheadsResults.filter(d => {
+            if (statusF && d.status !== statusF) return false;
+            if (seasonF && d.season_key !== seasonF) return false;
+            return true;
+        });
+        
+        const statusOrder = { 'map_zero': 0, 'long': 1, 'short': 2, 'catalog_missing': 3, 'ok': 4 };
+        filtered.sort((a,b) => {
+            if (deadheadsSortCol === 'status') {
+                return deadheadsSortDir === 'asc' ? statusOrder[a.status] - statusOrder[b.status] : statusOrder[b.status] - statusOrder[a.status];
+            }
+            let av = a[deadheadsSortCol] ?? -999, bv = b[deadheadsSortCol] ?? -999;
+            return deadheadsSortDir === 'asc' ? av - bv : bv - av;
+        });
+        
+        const dhOk = deadheadsResults.filter(d => d.status === 'ok').length;
+        const dhLong = deadheadsResults.filter(d => d.status === 'long').length;
+        const dhShort = deadheadsResults.filter(d => d.status === 'short').length;
+        const dhMapZero = deadheadsResults.filter(d => d.status === 'map_zero').length;
+        const dhCatalogMissing = deadheadsResults.filter(d => d.status === 'catalog_missing').length;
+        
+        document.getElementById('deadheadsSummary').innerHTML = `
+            <div class="stat-card"><div class="value green">${dhOk}</div><div class="label">OK</div></div>
+            <div class="stat-card"><div class="value orange">${dhMapZero}</div><div class="label">⚠️ חסר במפה</div></div>
+            <div class="stat-card"><div class="value red">${dhLong}</div><div class="label">LONG</div></div>
+            <div class="stat-card"><div class="value yellow">${dhShort}</div><div class="label">SHORT</div></div>
+            <div class="stat-card"><div class="value purple">${dhCatalogMissing}</div><div class="label">חסר בקטלוג</div></div>
+        `;
+        
+        document.getElementById('deadheadsBody').innerHTML = filtered.slice(0, 500).map(d => {
+            const statusBadge = d.status === 'ok' ? '<span class="badge badge-green">OK</span>' :
+                               d.status === 'long' ? '<span class="badge badge-red">LONG</span>' :
+                               d.status === 'short' ? '<span class="badge badge-yellow">SHORT</span>' :
+                               d.status === 'map_zero' ? '<span class="badge badge-orange">⚠️ חסר במפה</span>' :
+                               '<span class="badge badge-purple">חסר בקטלוג</span>';
+            
+            const diffText = d.diff !== null ? (d.diff > 0 ? `+${d.diff}` : d.diff) : '-';
+            const diffColor = d.diff === null ? '' : d.status === 'map_zero' ? 'color:var(--accent-orange)' :
+                             d.diff > 5 ? 'color:var(--accent-red)' : d.diff < -5 ? 'color:var(--accent-yellow)' : 'color:var(--accent-green)';
+            const rowClass = d.status === 'map_zero' ? 'warning-row' : d.status === 'long' ? 'highlight-row' : '';
+            
+            return `<tr class="${rowClass}">
+                <td>${d.duty_id}</td><td>${d.start_time}</td><td><span class="badge badge-blue">${d.season_label}</span></td>
+                <td title="${d.origin_id}">${d.origin_name || d.origin_id}</td>
+                <td title="${d.dest_id}">${d.dest_name || d.dest_id}</td>
+                <td><strong>${d.map_duration}'</strong></td><td>${d.catalog_duration !== null ? d.catalog_duration + "'" : '-'}</td>
+                <td style="${diffColor}"><strong>${diffText}</strong></td><td>${statusBadge}</td>
+            </tr>`;
+        }).join('');
+    }
 
-function downloadHTML() { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([document.documentElement.outerHTML], {type:'text/html'})); a.download = 'efficiency_report.html'; a.click(); }
+    function populateFilters() {
+        // RouteId filter for trips
+        const routeIdSelect = document.getElementById('filterRouteId');
+        const routeIds = [...new Set(tripsResults.map(t => t.route_id).filter(r => r))].sort();
+        routeIdSelect.innerHTML = '<option value="">כל המק"טים</option>' + routeIds.map(r => `<option value="${r}">${r}</option>`).join('');
+        
+        // Route filter for trips
+        const routeSelect = document.getElementById('filterRoute');
+        const routes = [...new Set(tripsResults.map(t => t.route))].sort((a,b) => a-b);
+        routeSelect.innerHTML = '<option value="">כל הקווים</option>' + routes.map(r => `<option value="${r}">קו ${r}</option>`).join('');
+        
+        // RouteId filter for routes tab
+        const routesRouteIdSelect = document.getElementById('filterRoutesRouteId');
+        routesRouteIdSelect.innerHTML = '<option value="">כל המק"טים</option>' + routeIds.map(r => `<option value="${r}">${r}</option>`).join('');
+    }
 
-['exec-zone', 'plan-zone'].forEach(id => { const z = document.getElementById(id), t = id.split('-')[0]; z.addEventListener('dragover', e => { e.preventDefault(); z.classList.add('dragover'); }); z.addEventListener('dragleave', () => z.classList.remove('dragover')); z.addEventListener('drop', e => { e.preventDefault(); z.classList.remove('dragover'); if (e.dataTransfer.files[0]) { document.getElementById(t+'-file').files = e.dataTransfer.files; handleFile(document.getElementById(t+'-file'), t); }}); });
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
-</script>
+    function sortTrips(col) {
+        if (tripsSortCol === col) tripsSortDir = tripsSortDir === 'asc' ? 'desc' : 'asc';
+        else { tripsSortCol = col; tripsSortDir = 'desc'; }
+        renderTrips();
+    }
+    
+    function sortRoutes(col) {
+        if (routesSortCol === col) routesSortDir = routesSortDir === 'asc' ? 'desc' : 'asc';
+        else { routesSortCol = col; routesSortDir = 'desc'; }
+        renderRoutes();
+    }
+    
+    function sortDeadheads(col) {
+        if (deadheadsSortCol === col) deadheadsSortDir = deadheadsSortDir === 'asc' ? 'desc' : 'asc';
+        else { deadheadsSortCol = col; deadheadsSortDir = 'desc'; }
+        renderDeadheads();
+    }
+    
+    function sortDuties(col) { renderDuties(); }
+
+    // === Export Functions ===
+    function exportTripsCSV() {
+        const headers = ['סידור','מקט','קו','כיוון','יציאה','תכנון','אחוזון','ערך','פער','NE_נוכחי','NE_אחרי','IN_נוכחי','המלצה','הגדרה','168_תכנון','168_אחוזון'];
+        let csv = headers.join(',') + '\n';
+        tripsResults.forEach(t => {
+            csv += [t.duty_id, t.route_id || '', t.route, t.direction, t.start_time, t.planned, t.dynamic_pct, t.pct_value?.toFixed(1),
+                t.is_last ? 'אחרון' : t.gap_to_next, t.prob_non_exec?.toFixed(2) || '-', t.prob_non_exec_rec?.toFixed(2) || '-',
+                t.prob_inaccuracy?.toFixed(2) || '-', t.rec, t.rec_duration, t.duty_168_plan?'V':'X', t.duty_168_actual?'V':'X'].join(',') + '\n';
+        });
+        downloadCSV(csv, 'trips_analysis.csv');
+    }
+
+    function exportDutiesCSV() {
+        const headers = ['סידור','התחלה','סיום','משך','168_תכנון','168_אחוזון'];
+        let csv = headers.join(',') + '\n';
+        dutiesResults.forEach(d => {
+            csv += [d.duty_id, d.startTime, d.endTime, (d.total_duration/60).toFixed(1), d.plan_compliant?'V':'X', d.actual_compliant?'V':'X'].join(',') + '\n';
+        });
+        downloadCSV(csv, 'duties_rule168.csv');
+    }
+    
+    function exportDeadheadsCSV() {
+        const headers = ['סידור','שעה','עונה','מוצא_ID','יעד_ID','מוצא','יעד','מפה_דקות','קטלוג_דקות','פער','סטטוס'];
+        let csv = headers.join(',') + '\n';
+        deadheadsResults.forEach(d => {
+            csv += [d.duty_id, d.start_time, d.season_label, d.origin_id, d.dest_id, 
+                    `"${d.origin_name}"`, `"${d.dest_name}"`,
+                    d.map_duration, d.catalog_duration || '-', d.diff || '-', d.status_label].join(',') + '\n';
+        });
+        downloadCSV(csv, 'deadheads_analysis.csv');
+    }
+
+    function downloadCSV(content, filename) {
+        const blob = new Blob(['\ufeff' + content], { type: 'text/csv;charset=utf-8' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(a.href); }, 100);
+    }
+
+    // === Event Listeners for Filters ===
+    ['filterRouteId','filterRoute','filterStatus','filterRec','filter168'].forEach(id => document.getElementById(id).addEventListener('change', renderTrips));
+    document.getElementById('filterDuty168').addEventListener('change', renderDuties);
+    document.getElementById('filterRoutesRouteId').addEventListener('change', renderRoutes);
+    document.getElementById('filterDeadheadStatus').addEventListener('change', renderDeadheads);
+    document.getElementById('filterDeadheadSeason').addEventListener('change', renderDeadheads);
+    </script>
 </body>
 </html>
