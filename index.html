@@ -69,11 +69,6 @@
         .gap-item-label { font-size: 0.7rem; color: #64748b; margin-top: 4px; }
         
         .hidden { display: none !important; }
-
-        .day-filter-btn { transition: all 0.2s; cursor: pointer; border: none; }
-        .day-filter-btn:hover { opacity: 0.85; }
-        .day-filter-btn.active { background: #2563eb !important; color: white !important; }
-
         @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } .sidebar { position: relative; height: auto; } }
     </style>
 </head>
@@ -150,13 +145,12 @@
         <div class="layout">
             <aside class="sidebar">
                 <div><h2 class="text-lg font-black text-slate-800 flex items-center gap-2"><i class="fas fa-chart-pie text-blue-600"></i> תוצאות</h2><p class="text-xs text-slate-400 mt-1" id="analysis-date"></p></div>
-                <!-- בורר ימים -->
                 <div class="card border-slate-300 bg-slate-50">
                     <div class="text-xs font-bold text-slate-600 mb-2"><i class="fas fa-calendar-week ml-1"></i> סינון לפי ימים</div>
                     <div class="flex gap-1">
-                        <button onclick="setDayFilter('all')" id="filter-all" class="day-filter-btn flex-1 py-2 px-2 text-xs font-bold rounded-lg bg-blue-600 text-white">הכל</button>
-                        <button onclick="setDayFilter('weekday')" id="filter-weekday" class="day-filter-btn flex-1 py-2 px-2 text-xs font-bold rounded-lg bg-slate-200 text-slate-600">א-ה</button>
-                        <button onclick="setDayFilter('weekend')" id="filter-weekend" class="day-filter-btn flex-1 py-2 px-2 text-xs font-bold rounded-lg bg-slate-200 text-slate-600">שישי-שבת</button>
+                        <button onclick="setDayFilter('all')" id="filter-all" class="flex-1 py-2 px-2 text-xs font-bold rounded-lg bg-blue-600 text-white">הכל</button>
+                        <button onclick="setDayFilter('weekday')" id="filter-weekday" class="flex-1 py-2 px-2 text-xs font-bold rounded-lg bg-slate-200 text-slate-600 hover:bg-slate-300">א-ה</button>
+                        <button onclick="setDayFilter('weekend')" id="filter-weekend" class="flex-1 py-2 px-2 text-xs font-bold rounded-lg bg-slate-200 text-slate-600 hover:bg-slate-300">שישי-שבת</button>
                     </div>
                     <div class="text-xs text-slate-500 mt-2" id="day-count-info"></div>
                 </div>
@@ -199,54 +193,35 @@ let STATE = { execData: null, planData: null, execResults: [], planResults: [], 
 const CATEGORY_COLORS = { 'תח"צ': '#22c55e', 'הכנת מכונה': '#f59e0b', 'נסיעה ריקה': '#ef4444', 'המתנה': '#8b5cf6', 'הפסקה': '#06b6d4', 'לרשות': '#ec4899', 'אחר': '#64748b' };
 const MAX_TRIP_KM = 200; // סף מקסימלי לנסיעה (לסינון חריגים)
 
-// פונקציה לזיהוי יום בשבוע מתאריך
+// פונקציות לזיהוי יום בשבוע
 function parseDateToDay(dateStr) {
     if (!dateStr) return null;
-    // תמיכה בפורמטים שונים: DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY, YYYY-MM-DD
     const str = String(dateStr).trim();
     let day, month, year;
-
     if (str.includes('/')) {
         const parts = str.split('/');
-        if (parts[0].length === 4) { // YYYY/MM/DD
-            [year, month, day] = parts;
-        } else { // DD/MM/YYYY
-            [day, month, year] = parts;
-        }
+        if (parts[0].length === 4) { [year, month, day] = parts; }
+        else { [day, month, year] = parts; }
     } else if (str.includes('-')) {
         const parts = str.split('-');
-        if (parts[0].length === 4) { // YYYY-MM-DD
-            [year, month, day] = parts;
-        } else { // DD-MM-YYYY
-            [day, month, year] = parts;
-        }
+        if (parts[0].length === 4) { [year, month, day] = parts; }
+        else { [day, month, year] = parts; }
     } else if (str.includes('.')) {
         [day, month, year] = str.split('.');
-    } else {
-        return null;
-    }
-
+    } else { return null; }
     const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
     if (isNaN(date.getTime())) return null;
-    return date.getDay(); // 0 = Sunday, 5 = Friday, 6 = Saturday
+    return date.getDay();
 }
-
-// בדיקה אם היום הוא סוף שבוע (שישי-שבת)
-function isWeekend(dayOfWeek) {
-    return dayOfWeek === 5 || dayOfWeek === 6; // Friday or Saturday
-}
-
-// קבלת סוג היום
+function isWeekend(dayOfWeek) { return dayOfWeek === 5 || dayOfWeek === 6; }
 function getDayType(dateStr) {
-    const dayOfWeek = parseDateToDay(dateStr);
-    if (dayOfWeek === null) return 'unknown';
-    return isWeekend(dayOfWeek) ? 'weekend' : 'weekday';
+    const dow = parseDateToDay(dateStr);
+    if (dow === null) return 'unknown';
+    return isWeekend(dow) ? 'weekend' : 'weekday';
 }
-
-// שם היום בעברית
-function getDayName(dayOfWeek) {
+function getDayName(dow) {
     const days = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
-    return days[dayOfWeek] || '';
+    return days[dow] || '';
 }
 
 function isNegevCluster(filename, data) {
@@ -337,8 +312,6 @@ function categorizeActivity(desc, isPT) {
 function analyzeExecution() {
     const results = []; STATE.driverDetails = {};
     const grouped = {};
-
-    // ספירת ימים ייחודיים
     const uniqueDates = { all: new Set(), weekday: new Set(), weekend: new Set() };
 
     // קבלת ק"מ ידני או מתכנון
@@ -351,22 +324,15 @@ function analyzeExecution() {
         const key = `${date}|${driver}`;
         if (!grouped[key]) grouped[key] = [];
         grouped[key].push(row);
-
         // ספירת ימים ייחודיים
         if (date) {
             uniqueDates.all.add(date);
-            const dayType = getDayType(date);
-            if (dayType === 'weekday') uniqueDates.weekday.add(date);
-            else if (dayType === 'weekend') uniqueDates.weekend.add(date);
+            const dt = getDayType(date);
+            if (dt === 'weekday') uniqueDates.weekday.add(date);
+            else if (dt === 'weekend') uniqueDates.weekend.add(date);
         }
     });
-
-    // שמירת ספירת הימים
-    STATE.dayCounts = {
-        all: uniqueDates.all.size,
-        weekday: uniqueDates.weekday.size,
-        weekend: uniqueDates.weekend.size
-    };
+    STATE.dayCounts = { all: uniqueDates.all.size, weekday: uniqueDates.weekday.size, weekend: uniqueDates.weekend.size };
     
     let totalExecPtTrips = 0;
     Object.values(grouped).forEach(rows => {
@@ -449,13 +415,9 @@ function analyzeExecution() {
             dutyStatus = `${dutyIds.length} סידורים`;
         }
         
-        // זיהוי יום בשבוע
-        const dayOfWeek = parseDateToDay(date);
-        const dayType = getDayType(date);
-        const dayName = getDayName(dayOfWeek);
-
         STATE.driverDetails[key] = { activities, breakdown, summary: { totalMinutes, ptMinutes, nonPtMinutes, ptKm: effectivePtKm, paymentMinutes }, dutyIds };
-        results.push({ date, driver: parseInt(driver), totalMinutes: Math.round(totalMinutes), paymentMinutes: Math.round(paymentMinutes), ptMinutes: Math.round(ptMinutes), nonPtMinutes: Math.round(nonPtMinutes), ptKm: Math.round(effectivePtKm * 100) / 100, minPerKm: Math.round(minPerKm * 100) / 100, ptPercent: Math.round(ptPercent * 10) / 10, status, tripCount, startTime: formatMinutes(workStart), endTime: formatMinutes(workEnd), breakdown, dutyIds, dutyStatus, dayOfWeek, dayType, dayName });
+        const dayType = getDayType(date);
+        results.push({ date, driver: parseInt(driver), totalMinutes: Math.round(totalMinutes), paymentMinutes: Math.round(paymentMinutes), ptMinutes: Math.round(ptMinutes), nonPtMinutes: Math.round(nonPtMinutes), ptKm: Math.round(effectivePtKm * 100) / 100, minPerKm: Math.round(minPerKm * 100) / 100, ptPercent: Math.round(ptPercent * 10) / 10, status, tripCount, startTime: formatMinutes(workStart), endTime: formatMinutes(workEnd), breakdown, dutyIds, dutyStatus, dayType });
     });
     
     // שמירת מקור ק"מ
@@ -536,41 +498,31 @@ function analyzeGaps() {
 
 function runAnalysis() {
     STATE.execResults = analyzeExecution(); STATE.planResults = analyzePlanning(); STATE.gaps = analyzeGaps();
-    STATE.dayFilter = 'all'; // reset filter
-    setDayFilter('all'); // initialize display with "all" filter
+    updateKPIs(); renderTables(); renderGapsDetailed();
     document.getElementById('upload-section').classList.add('hidden'); document.getElementById('results-section').classList.remove('hidden');
     document.getElementById('analysis-date').textContent = new Date().toLocaleDateString('he-IL') + ' ' + new Date().toLocaleTimeString('he-IL');
 }
 
 function updateKPIs() {
-    const filteredResults = getFilteredResults();
+    const filtered = getFilteredResults();
     const dayCount = STATE.dayCounts[STATE.dayFilter] || 1;
-
-    // עדכון מידע על מספר הימים
-    const filterLabels = { all: 'כל הימים', weekday: 'ימים א-ה', weekend: 'שישי-שבת' };
-    document.getElementById('day-count-info').innerHTML = `
-        <i class="fas fa-info-circle ml-1"></i>
-        ${filterLabels[STATE.dayFilter]}: <strong>${dayCount}</strong> ימים
-        ${STATE.dayFilter === 'all' ? `<br><span class="text-xs">(א-ה: ${STATE.dayCounts.weekday}, שישי-שבת: ${STATE.dayCounts.weekend})</span>` : ''}
-    `;
-
+    // עדכון מידע ימים
+    const labels = { all: 'כל הימים', weekday: 'א-ה', weekend: 'שישי-שבת' };
+    document.getElementById('day-count-info').innerHTML = '<i class="fas fa-info-circle ml-1"></i> ' + labels[STATE.dayFilter] + ': <strong>' + dayCount + '</strong> ימים';
     // חישוב דקות/ק"מ = שעות תשלום / ק"מ תח"צ
-    const totalPaymentMin = filteredResults.reduce((a, b) => a + (b.paymentMinutes || b.totalMinutes), 0);
-    const totalPtKm = filteredResults.reduce((a, b) => a + b.ptKm, 0);
+    const totalPaymentMin = filtered.reduce((a, b) => a + (b.paymentMinutes || b.totalMinutes), 0);
+    const totalPtKm = filtered.reduce((a, b) => a + b.ptKm, 0);
     const execAvgMinKm = totalPtKm > 0 ? totalPaymentMin / totalPtKm : 0;
-    const execAvgPt = filteredResults.reduce((a, b) => a + b.ptPercent, 0) / filteredResults.length || 0;
-    const lowCount = filteredResults.filter(r => r.ptPercent < 75).length;
-    // נתונים מנורמלים ליום
-    const ptKmPerDay = dayCount > 0 ? totalPtKm / dayCount : 0;
-    const paymentMinPerDay = dayCount > 0 ? totalPaymentMin / dayCount : 0;
-
+    const execAvgPt = filtered.length > 0 ? filtered.reduce((a, b) => a + b.ptPercent, 0) / filtered.length : 0;
+    const lowCount = filtered.filter(r => r.ptPercent < 75).length;
+    const ptKmPerDay = dayCount > 0 ? (totalPtKm / dayCount).toFixed(0) : 0;
     document.getElementById('kpi-min-km').textContent = execAvgMinKm.toFixed(2);
-    document.getElementById('kpi-pt-km').innerHTML = `${totalPtKm.toLocaleString('he-IL')}<div class="text-xs text-slate-400 font-normal mt-1">${ptKmPerDay.toFixed(0)} ק"מ/יום</div>`;
+    document.getElementById('kpi-pt-km').innerHTML = totalPtKm.toLocaleString('he-IL') + '<div class="text-xs text-slate-400 font-normal mt-1">' + ptKmPerDay + ' ק"מ/יום</div>';
     document.getElementById('kpi-pt-pct').textContent = execAvgPt.toFixed(1) + '%';
     document.getElementById('kpi-pt-pct').className = `stat-val ${execAvgPt >= 75 ? 'text-green-600' : 'text-red-500'}`;
     document.getElementById('kpi-low-count').textContent = lowCount;
-    document.getElementById('kpi-low-sub').textContent = `מתוך ${filteredResults.length} נהגים`;
-    document.getElementById('kpi-total-drivers').textContent = filteredResults.length;
+    document.getElementById('kpi-low-sub').textContent = `מתוך ${filtered.length} נהגים`;
+    document.getElementById('kpi-total-drivers').textContent = filtered.length;
     
     // הוספת הערה על מקור ק"מ
     let kmSourceNote = '';
@@ -592,14 +544,14 @@ function updateKPIs() {
         document.getElementById('compare-pt-km').innerHTML = '';
         document.getElementById('compare-pt-pct').innerHTML = `<div><div class="compare-label">יעד</div><div class="compare-val text-green-600">75%</div></div>`;
     }
-    document.getElementById('badge-drivers').textContent = filteredResults.length;
+    document.getElementById('badge-drivers').textContent = getFilteredResults().length;
     document.getElementById('badge-low').textContent = lowCount;
     document.getElementById('badge-planning').textContent = STATE.planResults.length;
 }
 
 function renderTables() {
-    const filteredResults = getFilteredResults();
-    document.querySelector('#table-drivers tbody').innerHTML = filteredResults.map(r => {
+    const filtered = getFilteredResults();
+    document.querySelector('#table-drivers tbody').innerHTML = filtered.map(r => {
         // עמודת סידורים - עם לחיצה לפרטים
         let dutyCell = '';
         if (r.dutyIds && r.dutyIds.length > 0) {
@@ -611,35 +563,16 @@ function renderTables() {
         }
         return `<tr><td>${r.date}</td><td class="font-bold clickable" onclick="showDriverDetail('${r.date}', ${r.driver})">${r.driver}</td><td>${dutyCell}</td><td class="font-mono text-xs">${r.startTime}</td><td class="font-mono text-xs">${r.endTime}</td><td>${r.totalMinutes}</td><td>${r.ptMinutes}</td><td>${r.ptKm}</td><td class="font-bold">${r.minPerKm}</td><td class="font-bold ${r.ptPercent >= 75 ? 'text-green-600' : 'text-red-500'}">${r.ptPercent}%</td><td><span class="${r.status === 'תקין' ? 'status-ok' : r.status === 'נמוך' ? 'status-warn' : 'status-bad'}">${r.status}</span></td></tr>`;
     }).join('');
-    document.querySelector('#table-low tbody').innerHTML = filteredResults.filter(r => r.ptPercent < 75).map(r => `<tr><td>${r.date}</td><td class="font-bold clickable" onclick="showDriverDetail('${r.date}', ${r.driver})">${r.driver}</td><td class="font-mono text-xs">${r.startTime}</td><td class="font-mono text-xs">${r.endTime}</td><td>${r.totalMinutes}</td><td>${r.ptMinutes}</td><td class="font-bold text-red-500">${r.ptPercent}%</td><td class="font-bold text-red-600">-${(75 - r.ptPercent).toFixed(1)}%</td></tr>`).join('');
+    document.querySelector('#table-low tbody').innerHTML = filtered.filter(r => r.ptPercent < 75).map(r => `<tr><td>${r.date}</td><td class="font-bold clickable" onclick="showDriverDetail('${r.date}', ${r.driver})">${r.driver}</td><td class="font-mono text-xs">${r.startTime}</td><td class="font-mono text-xs">${r.endTime}</td><td>${r.totalMinutes}</td><td>${r.ptMinutes}</td><td class="font-bold text-red-500">${r.ptPercent}%</td><td class="font-bold text-red-600">-${(75 - r.ptPercent).toFixed(1)}%</td></tr>`).join('');
     document.querySelector('#table-planning tbody').innerHTML = STATE.planResults.map(r => `<tr><td class="font-bold clickable" onclick="showDutyDetail(${r.dutyId})">${r.dutyId}</td><td>${r.totalMinutes}</td><td>${r.ptMinutes}</td><td>${r.ptKm}</td><td class="font-bold">${r.minPerKm}</td><td>${r.ptPercent}%</td><td>${r.tripCount}</td></tr>`).join('');
 }
 
 function renderGapsDetailed() {
-    const filteredResults = getFilteredResults();
-    const dayCount = STATE.dayCounts[STATE.dayFilter] || 1;
-    const c = document.getElementById('gaps-container');
-
-    // Build execution breakdown from filtered results
-    const execBreakdown = {};
-    let totalMinutes = 0, totalPtMinutes = 0, totalPtKm = 0, totalPaymentMinutes = 0;
-    filteredResults.forEach(r => {
-        totalMinutes += r.totalMinutes;
-        totalPtMinutes += r.ptMinutes;
-        totalPtKm += r.ptKm;
-        totalPaymentMinutes += r.paymentMinutes || r.totalMinutes;
-        Object.entries(r.breakdown || {}).forEach(([cat, data]) => {
-            if (!execBreakdown[cat]) execBreakdown[cat] = { minutes: 0, km: 0 };
-            execBreakdown[cat].minutes += data.minutes;
-            execBreakdown[cat].km += data.km;
-        });
-    });
-    const execAvgMinKm = totalPtKm > 0 ? totalPaymentMinutes / totalPtKm : 0;
-    const nonPtMinutes = totalMinutes - totalPtMinutes;
-
+    const gaps = STATE.gaps, c = document.getElementById('gaps-container');
+    
     // Build planning breakdown
     const planBreakdown = {};
-    let planTotalMin = 0, planTotalKm = 0, planPaymentMin = 0;
+    let planTotalMin = 0, planTotalKm = 0;
     STATE.planResults.forEach(r => {
         Object.entries(r.breakdown || {}).forEach(([cat, data]) => {
             if (!planBreakdown[cat]) planBreakdown[cat] = { minutes: 0, km: 0 };
@@ -647,13 +580,11 @@ function renderGapsDetailed() {
             planBreakdown[cat].km += data.km;
         });
         planTotalMin += r.totalMinutes;
-        planPaymentMin += r.paymentMinutes !== undefined ? r.paymentMinutes : r.totalMinutes;
     });
     Object.values(planBreakdown).forEach(d => planTotalKm += d.km);
-    const planAvgMinKm = planTotalKm > 0 ? planPaymentMin / planTotalKm : 0;
-
+    
     // All categories
-    const allCats = [...new Set([...Object.keys(execBreakdown), ...Object.keys(planBreakdown)])];
+    const allCats = [...new Set([...Object.keys(gaps.breakdown), ...Object.keys(planBreakdown)])];
     
     // Category descriptions
     const catDesc = {
@@ -666,30 +597,15 @@ function renderGapsDetailed() {
         'אחר': 'תדלוק, פעולות אחרות'
     };
     
-    // Filter label
-    const filterLabels = { all: 'כל הימים', weekday: 'ימים א-ה', weekend: 'שישי-שבת' };
-    const filterLabel = filterLabels[STATE.dayFilter];
-    const gap = execAvgMinKm - planAvgMinKm;
-
-    const barHtml = Object.entries(execBreakdown).sort((a,b) => b[1].minutes - a[1].minutes).map(([cat, data]) => {
-        const pct = totalMinutes > 0 ? (data.minutes / totalMinutes * 100).toFixed(1) : 0;
-        const color = CATEGORY_COLORS[cat] || '#64748b';
+    const barHtml = Object.entries(gaps.breakdown).sort((a,b) => b[1].minutes - a[1].minutes).map(([cat, data]) => {
+        const pct = (data.minutes / gaps.summary.totalMinutes * 100).toFixed(1), color = CATEGORY_COLORS[cat] || '#64748b';
         return `<div class="breakdown-segment" style="width:${pct}%; background:${color}" title="${cat}: ${Math.round(data.minutes)} דק">${pct > 5 ? pct + '%' : ''}</div>`;
     }).join('');
-
+    
     c.innerHTML = `
-        <div class="gap-card bg-gradient-to-r from-blue-50 to-slate-50">
-            <div class="gap-title"><i class="fas fa-calendar-alt ml-2 text-blue-500"></i> ${filterLabel} - ${dayCount} ימים</div>
-            <div class="gap-breakdown">
-                <div class="gap-item"><div class="gap-item-value text-cyan-600">${totalPtKm.toLocaleString('he-IL')}</div><div class="gap-item-label">ק"מ תח"צ סה"כ</div></div>
-                <div class="gap-item"><div class="gap-item-value text-cyan-700">${(totalPtKm / dayCount).toFixed(0)}</div><div class="gap-item-label">ק"מ תח"צ ליום</div></div>
-                <div class="gap-item"><div class="gap-item-value text-purple-600">${(totalMinutes / 60).toFixed(0)}</div><div class="gap-item-label">שעות עבודה סה"כ</div></div>
-                <div class="gap-item"><div class="gap-item-value text-purple-700">${((totalMinutes / dayCount) / 60).toFixed(1)}</div><div class="gap-item-label">שעות ליום</div></div>
-            </div>
-        </div>
         <div class="gap-card"><div class="gap-title"><i class="fas fa-chart-pie ml-2 text-blue-500"></i> סיכום דקות/ק"מ</div>
-        <div class="gap-breakdown"><div class="gap-item"><div class="gap-item-value text-blue-600">${execAvgMinKm.toFixed(2)}</div><div class="gap-item-label">דק/ק"מ ביצוע</div></div>
-        ${STATE.planResults.length > 0 ? `<div class="gap-item"><div class="gap-item-value text-slate-600">${planAvgMinKm.toFixed(2)}</div><div class="gap-item-label">דק/ק"מ תכנון</div></div><div class="gap-item"><div class="gap-item-value ${gap > 0 ? 'text-red-500' : 'text-green-500'}">${gap > 0 ? '+' : ''}${gap.toFixed(2)}</div><div class="gap-item-label">פער</div></div>` : ''}</div></div>
+        <div class="gap-breakdown"><div class="gap-item"><div class="gap-item-value text-blue-600">${gaps.summary.execAvgMinKm.toFixed(2)}</div><div class="gap-item-label">דק/ק"מ ביצוע</div></div>
+        ${STATE.planResults.length > 0 ? `<div class="gap-item"><div class="gap-item-value text-slate-600">${gaps.summary.planAvgMinKm.toFixed(2)}</div><div class="gap-item-label">דק/ק"מ תכנון</div></div><div class="gap-item"><div class="gap-item-value ${gaps.summary.gap > 0 ? 'text-red-500' : 'text-green-500'}">${gaps.summary.gap > 0 ? '+' : ''}${gaps.summary.gap.toFixed(2)}</div><div class="gap-item-label">פער</div></div>` : ''}</div></div>
         
         <!-- Comparison Table -->
         ${STATE.planResults.length > 0 ? `
@@ -723,9 +639,9 @@ function renderGapsDetailed() {
                             return order.indexOf(a) - order.indexOf(b);
                         }).map(cat => {
                             const plan = planBreakdown[cat] || { minutes: 0, km: 0 };
-                            const exec = execBreakdown[cat] || { minutes: 0, km: 0 };
+                            const exec = gaps.breakdown[cat] || { minutes: 0, km: 0 };
                             const planPct = planTotalMin > 0 ? (plan.minutes / planTotalMin * 100) : 0;
-                            const execPct = totalMinutes > 0 ? (exec.minutes / totalMinutes * 100) : 0;
+                            const execPct = gaps.summary.totalMinutes > 0 ? (exec.minutes / gaps.summary.totalMinutes * 100) : 0;
                             const diffMin = exec.minutes - plan.minutes;
                             const diffKm = exec.km - plan.km;
                             const diffPct = execPct - planPct;
@@ -752,10 +668,10 @@ function renderGapsDetailed() {
                             <td class="p-2 text-center">${Math.round(planTotalMin).toLocaleString()}</td>
                             <td class="p-2 text-center">${Object.values(planBreakdown).reduce((a,b) => a + b.km, 0).toFixed(1)}</td>
                             <td class="p-2 text-center">100%</td>
-                            <td class="p-2 text-center">${Math.round(totalMinutes).toLocaleString()}</td>
-                            <td class="p-2 text-center">${Object.values(execBreakdown).reduce((a,b) => a + b.km, 0).toFixed(1)}</td>
+                            <td class="p-2 text-center">${Math.round(gaps.summary.totalMinutes).toLocaleString()}</td>
+                            <td class="p-2 text-center">${Object.values(gaps.breakdown).reduce((a,b) => a + b.km, 0).toFixed(1)}</td>
                             <td class="p-2 text-center">100%</td>
-                            <td class="p-2 text-center ${totalMinutes - planTotalMin > 0 ? 'text-red-600' : 'text-green-600'}">${totalMinutes - planTotalMin > 0 ? '+' : ''}${Math.round(totalMinutes - planTotalMin).toLocaleString()}</td>
+                            <td class="p-2 text-center ${gaps.summary.totalMinutes - planTotalMin > 0 ? 'text-red-600' : 'text-green-600'}">${gaps.summary.totalMinutes - planTotalMin > 0 ? '+' : ''}${Math.round(gaps.summary.totalMinutes - planTotalMin).toLocaleString()}</td>
                             <td class="p-2 text-center">-</td>
                             <td class="p-2 text-center">-</td>
                         </tr>
@@ -776,29 +692,24 @@ function renderGapsDetailed() {
             </div>
         </div>
         ` : ''}
-
+        
         <div class="gap-card"><div class="gap-title"><i class="fas fa-clock ml-2 text-purple-500"></i> פילוח זמן ביצוע</div><div class="mb-4"><div class="breakdown-bar">${barHtml}</div></div>
-        <div class="gap-breakdown">${Object.entries(execBreakdown).sort((a,b) => b[1].minutes - a[1].minutes).map(([cat, data]) => {
-            const pct = totalMinutes > 0 ? (data.minutes / totalMinutes * 100).toFixed(1) : 0;
-            const color = CATEGORY_COLORS[cat];
-            const hours = (data.minutes / 60).toFixed(1);
-            const perDay = dayCount > 0 ? (data.minutes / dayCount / 60).toFixed(1) : 0;
-            return '<div class="gap-item" style="border-right: 4px solid ' + color + '"><div class="gap-item-value" style="color:' + color + '">' + Math.round(data.minutes) + '</div><div class="gap-item-label">' + cat + '</div><div class="text-xs text-slate-500">' + hours + ' שעות (' + pct + '%)</div><div class="text-xs text-slate-400">' + perDay + ' שעות/יום</div></div>';
+        <div class="gap-breakdown">${Object.entries(gaps.breakdown).sort((a,b) => b[1].minutes - a[1].minutes).map(([cat, data]) => {
+            const pct = (data.minutes / gaps.summary.totalMinutes * 100).toFixed(1), color = CATEGORY_COLORS[cat], hours = (data.minutes / 60).toFixed(1);
+            return `<div class="gap-item" style="border-right: 4px solid ${color}"><div class="gap-item-value" style="color:${color}">${Math.round(data.minutes)}</div><div class="gap-item-label">${cat}</div><div class="text-xs text-slate-500">${hours} שעות (${pct}%)</div></div>`;
         }).join('')}</div></div>
-
+        
         <div class="gap-card"><div class="gap-title"><i class="fas fa-exclamation-triangle ml-2 text-amber-500"></i> השפעה על דקות/ק"מ לפי קטגוריה</div>
-        <div class="space-y-3">${Object.entries(execBreakdown).filter(([cat]) => cat !== 'תח"צ').sort((a,b) => b[1].minutes - a[1].minutes).map(([cat, data]) => {
-            const color = CATEGORY_COLORS[cat];
-            const impact = totalPtKm > 0 ? data.minutes / totalPtKm : 0;
-            const pctNonPt = nonPtMinutes > 0 ? (data.minutes / nonPtMinutes * 100) : 0;
-            return '<div class="flex items-center gap-4 p-3 bg-slate-50 rounded-lg"><div class="w-3 h-3 rounded-full" style="background:' + color + '"></div><div class="flex-1"><div class="font-bold text-slate-700">' + cat + '</div><div class="text-xs text-slate-500">' + Math.round(data.minutes) + ' דקות (' + pctNonPt.toFixed(1) + '% מזמן לא-תח"צ)</div></div><div class="text-left"><div class="font-bold text-lg" style="color:' + color + '">+' + impact.toFixed(2) + '</div><div class="text-xs text-slate-500">דק/ק"מ</div></div></div>';
+        <div class="space-y-3">${Object.entries(gaps.breakdown).filter(([cat]) => cat !== 'תח"צ').sort((a,b) => b[1].minutes - a[1].minutes).map(([cat, data]) => {
+            const color = CATEGORY_COLORS[cat], impact = gaps.summary.totalPtKm > 0 ? data.minutes / gaps.summary.totalPtKm : 0, pctNonPt = gaps.summary.nonPtMinutes > 0 ? (data.minutes / gaps.summary.nonPtMinutes * 100) : 0;
+            return `<div class="flex items-center gap-4 p-3 bg-slate-50 rounded-lg"><div class="w-3 h-3 rounded-full" style="background:${color}"></div><div class="flex-1"><div class="font-bold text-slate-700">${cat}</div><div class="text-xs text-slate-500">${Math.round(data.minutes)} דקות (${pctNonPt.toFixed(1)}% מזמן לא-תח"צ)</div></div><div class="text-left"><div class="font-bold text-lg" style="color:${color}">+${impact.toFixed(2)}</div><div class="text-xs text-slate-500">דק/ק"מ</div></div></div>`;
         }).join('')}</div>
-        <div class="mt-4 p-3 bg-blue-50 rounded-lg text-sm text-blue-700"><i class="fas fa-lightbulb ml-1"></i> <strong>הסבר:</strong> כל קטגוריה מוסיפה לדקות/ק"מ את הזמן שלה חלקי סה"כ ק"מ תח"צ (${totalPtKm.toFixed(0)} ק"מ).</div></div>
-
+        <div class="mt-4 p-3 bg-blue-50 rounded-lg text-sm text-blue-700"><i class="fas fa-lightbulb ml-1"></i> <strong>הסבר:</strong> כל קטגוריה מוסיפה לדקות/ק"מ את הזמן שלה חלקי סה"כ ק"מ תח"צ (${gaps.summary.totalPtKm.toFixed(0)} ק"מ).</div></div>
+        
         <div class="gap-card"><div class="gap-title"><i class="fas fa-users ml-2 text-red-500"></i> נהגים מתחת 75% תח"צ</div>
-        <div class="gap-breakdown"><div class="gap-item"><div class="gap-item-value text-red-500">${filteredResults.filter(r => r.ptPercent < 75).length}</div><div class="gap-item-label">נהגים</div></div>
-        <div class="gap-item"><div class="gap-item-value text-slate-600">${filteredResults.filter(r => r.ptPercent < 75).length > 0 ? (filteredResults.filter(r => r.ptPercent < 75).reduce((a,b) => a + b.ptPercent, 0) / filteredResults.filter(r => r.ptPercent < 75).length).toFixed(1) : 0}%</div><div class="gap-item-label">ממוצע % תח"צ</div></div>
-        <div class="gap-item"><div class="gap-item-value text-amber-500">${filteredResults.filter(r => r.ptPercent < 75).length > 0 ? (filteredResults.filter(r => r.ptPercent < 75).reduce((a,b) => a + b.minPerKm, 0) / filteredResults.filter(r => r.ptPercent < 75).length).toFixed(2) : 0}</div><div class="gap-item-label">ממוצע דק/ק"מ</div></div></div></div>`;
+        <div class="gap-breakdown"><div class="gap-item"><div class="gap-item-value text-red-500">${gaps.lowDrivers.length}</div><div class="gap-item-label">נהגים</div></div>
+        <div class="gap-item"><div class="gap-item-value text-slate-600">${gaps.lowDrivers.length > 0 ? (gaps.lowDrivers.reduce((a,b) => a + b.ptPercent, 0) / gaps.lowDrivers.length).toFixed(1) : 0}%</div><div class="gap-item-label">ממוצע % תח"צ</div></div>
+        <div class="gap-item"><div class="gap-item-value text-amber-500">${gaps.lowDrivers.length > 0 ? (gaps.lowDrivers.reduce((a,b) => a + b.minPerKm, 0) / gaps.lowDrivers.length).toFixed(2) : 0}</div><div class="gap-item-label">ממוצע דק/ק"מ</div></div></div></div>`;
 }
 
 function showDriverDetail(date, driver) {
@@ -887,33 +798,33 @@ function showDutyDetail(dutyId) {
 }
 
 function closeModal() { document.getElementById('detail-modal').classList.add('hidden'); }
-
-// פונקציה לסינון תוצאות לפי יום
+function showTab(id, btn) { document.querySelectorAll('.view').forEach(v => v.classList.add('hidden')); document.getElementById('view-' + id).classList.remove('hidden'); document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); }
+function filterTable() { const v = document.getElementById('search').value.toLowerCase(); document.querySelectorAll('tbody tr').forEach(r => r.style.display = r.innerText.toLowerCase().includes(v) ? '' : 'none'); }
+// פונקציות סינון לפי יום
 function getFilteredResults() {
     if (STATE.dayFilter === 'all') return STATE.execResults;
     return STATE.execResults.filter(r => r.dayType === STATE.dayFilter);
 }
 
-// פונקציה להגדרת סינון ימים
 function setDayFilter(filter) {
     STATE.dayFilter = filter;
     // עדכון כפתורים
-    document.querySelectorAll('.day-filter-btn').forEach(btn => btn.classList.remove('active', 'bg-blue-600', 'text-white'));
-    document.querySelectorAll('.day-filter-btn').forEach(btn => {
-        btn.classList.add('bg-slate-200', 'text-slate-600');
+    ['all', 'weekday', 'weekend'].forEach(f => {
+        const btn = document.getElementById('filter-' + f);
+        if (btn) {
+            if (f === filter) {
+                btn.className = 'flex-1 py-2 px-2 text-xs font-bold rounded-lg bg-blue-600 text-white';
+            } else {
+                btn.className = 'flex-1 py-2 px-2 text-xs font-bold rounded-lg bg-slate-200 text-slate-600 hover:bg-slate-300';
+            }
+        }
     });
-    const activeBtn = document.getElementById('filter-' + filter);
-    if (activeBtn) {
-        activeBtn.classList.remove('bg-slate-200', 'text-slate-600');
-        activeBtn.classList.add('active', 'bg-blue-600', 'text-white');
-    }
-    // עדכון התצוגה
+    // עדכון תצוגה
     updateKPIs();
     renderTables();
     renderGapsDetailed();
 }
-function showTab(id, btn) { document.querySelectorAll('.view').forEach(v => v.classList.add('hidden')); document.getElementById('view-' + id).classList.remove('hidden'); document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); }
-function filterTable() { const v = document.getElementById('search').value.toLowerCase(); document.querySelectorAll('tbody tr').forEach(r => r.style.display = r.innerText.toLowerCase().includes(v) ? '' : 'none'); }
+
 function resetAnalysis() { STATE = { execData: null, planData: null, execResults: [], planResults: [], gaps: [], driverDetails: {}, dutyDetails: {}, hasExecKm: false, planPtKm: 0, isNegev: false, dayFilter: 'all', dayCounts: { all: 0, weekday: 0, weekend: 0 } }; ['exec','plan'].forEach(t => { document.getElementById(t+'-zone').classList.remove('has-file'); document.getElementById(t+'-filename').textContent = ''; document.getElementById(t+'-file').value = ''; }); document.getElementById('results-section').classList.add('hidden'); document.getElementById('upload-section').classList.remove('hidden'); document.getElementById('manual-km-section').classList.add('hidden'); if(document.getElementById('manual-km')) document.getElementById('manual-km').value = ''; updateAnalyzeButton(); }
 
 function exportExcel() {
