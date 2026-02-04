@@ -314,6 +314,7 @@
                         <thead><tr>
                             <th onclick="sortRoutes('route_id')">מק"ט</th>
                             <th onclick="sortRoutes('route')">קו</th>
+                            <th onclick="sortRoutes('weekdays')">ימים</th>
                             <th onclick="sortRoutes('trips')">נסיעות</th>
                             <th onclick="sortRoutes('data_count')">נתונים</th>
                             <th>אחוזון</th>
@@ -682,19 +683,32 @@
         const filtered = actualsData.filter(row => !isExcludedDate(row.TripSourceDate));
         const actualsMap = {};  // Key: RouteId-Direction-TimeBucket
         const routeIdsInActuals = new Set();
-        
+        const routeIdWeekdays = {};  // מיפוי RouteId -> Set של ימים בשבוע
+        const weekdayNames = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳'];
+
         for (const row of filtered) {
             const routeId = row.RouteId || row.Routeld;
             const dir = parseInt(row.Direction);
             const time = timeToMinutes(row.TripSourceTime);
             let dur = parseDuration(row.Duration); if (!dur || dur <= 0) dur = parseDuration(row['Duration_Percentile_50']) || parseDuration(row['Duration_Percentile_75']) || parseDuration(row['Duration_Percentile_80']);
-            
+
             if (!routeId || isNaN(dir) || time === null || dur === null || dur <= 0 || dur > 180) continue;
-            
+
             routeIdsInActuals.add(routeId);
+
+            // איסוף ימי השבוע לכל RouteId
+            if (row.TripSourceDate) {
+                const p = row.TripSourceDate.split('/');
+                let year = parseInt(p[2]); if (year < 100) year += year < 50 ? 2000 : 1900;
+                const dateObj = new Date(year, parseInt(p[1])-1, parseInt(p[0]));
+                const dayOfWeek = dateObj.getDay();
+                if (!routeIdWeekdays[routeId]) routeIdWeekdays[routeId] = new Set();
+                routeIdWeekdays[routeId].add(dayOfWeek);
+            }
+
             const bucket = Math.round(time / 10) * 10;
             const key = `${routeId}-${dir}-${bucket}`;
-            
+
             if (!actualsMap[key]) actualsMap[key] = [];
             actualsMap[key].push(dur);
         }
@@ -866,27 +880,31 @@
                     probIN_rec = probIN;
                 }
                 
+                // קבלת ימי השבוע עבור ה-RouteId
+                const weekdays = routeIdWeekdays[trip.routeId] ? [...routeIdWeekdays[trip.routeId]].sort((a,b) => a-b).map(d => weekdayNames[d]).join('') : '-';
+
                 tripsResults.push({
-                    duty_id: dutyId, 
+                    duty_id: dutyId,
                     route_id: trip.routeId,  // מק"ט קו
                     route: trip.route,  // מספר קו
-                    direction: trip.direction, 
-                    start_time: trip.startTime, 
-                    hour, 
+                    direction: trip.direction,
+                    start_time: trip.startTime,
+                    hour,
                     planned,
-                    dynamic_pct: noData ? 'N/A' : dynPct.label, 
-                    pct_value: pctValue, 
-                    gap_to_next: gapToNext, 
+                    dynamic_pct: noData ? 'N/A' : dynPct.label,
+                    pct_value: pctValue,
+                    gap_to_next: gapToNext,
                     is_last: isLast,
-                    prob_non_exec: probNE, 
+                    prob_non_exec: probNE,
                     prob_inaccuracy: probIN,
-                    prob_non_exec_rec: probNE_rec, 
+                    prob_non_exec_rec: probNE_rec,
                     prob_inaccuracy_rec: probIN_rec,
-                    rec, 
-                    rec_duration: recDur, 
-                    is_ignored: dynPct.ignore, 
+                    rec,
+                    rec_duration: recDur,
+                    is_ignored: dynPct.ignore,
                     no_data: noData,
-                    data_count: dataCount
+                    data_count: dataCount,
+                    weekdays: weekdays
                 });
             }
             
@@ -963,19 +981,20 @@
         const groups = {};
         tripsResults.filter(t => !t.is_last && !t.no_data).forEach(t => {
             const key = t.route_id || t.route;
-            if (!groups[key]) groups[key] = { route_id: t.route_id, route: t.route, trips: [] };
+            if (!groups[key]) groups[key] = { route_id: t.route_id, route: t.route, trips: [], weekdays: t.weekdays };
             groups[key].trips.push(t);
         });
-        
+
         for (const [key, group] of Object.entries(groups)) {
             const trips = group.trips;
             const dynPct = getDynamicPercentile(group.route_id, 12);
             const validTrips = trips.filter(t => t.prob_non_exec !== null);
             const avgDataCount = trips.reduce((a, t) => a + (t.data_count || 0), 0) / trips.length;
-            
+
             routesResults.push({
                 route_id: group.route_id,
                 route: group.route,
+                weekdays: group.weekdays || '-',
                 trips: trips.length,
                 data_count: Math.round(avgDataCount),
                 pct_label: dynPct.ignore ? 'GPS' : dynPct.label,
@@ -1173,6 +1192,7 @@
             return `<tr>
                 <td><span class="badge badge-cyan">${r.route_id || '-'}</span></td>
                 <td><strong>קו ${r.route}</strong></td>
+                <td><span style="font-family:monospace;font-size:0.85rem;">${r.weekdays || '-'}</span></td>
                 <td>${r.trips}</td>
                 <td>${r.data_count}</td>
                 <td><span class="badge ${pctClass}">${r.pct_label}</span></td>
