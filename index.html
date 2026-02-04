@@ -258,6 +258,7 @@
                             <th onclick="sortTrips('duty_id')">סידור</th>
                             <th onclick="sortTrips('route_id')">מק"ט</th>
                             <th onclick="sortTrips('route')">קו</th>
+                            <th onclick="sortTrips('weekdays')">ימים</th>
                             <th onclick="sortTrips('direction')">כיוון</th>
                             <th onclick="sortTrips('start_time')">יציאה</th>
                             <th onclick="sortTrips('planned')">תכנון</th>
@@ -1137,6 +1138,7 @@
                 <td>${t.duty_id}</td>
                 <td><span class="badge badge-cyan">${t.route_id || '-'}</span></td>
                 <td><strong>${t.route}</strong></td>
+                <td><span style="font-family:monospace;font-size:0.75rem;">${t.weekdays || '-'}</span></td>
                 <td>${t.direction}</td><td>${t.start_time}</td><td>${t.planned}'</td>
                 <td><span class="badge ${pctClass}">${t.dynamic_pct}</span></td><td><strong>${t.pct_value.toFixed(0)}'</strong></td>
                 <td>${t.is_last ? '<span class="badge badge-blue">אחרון</span>' : t.gap_to_next + "'"}</td>
