@@ -684,7 +684,7 @@
         const routeIdsInActuals = new Set();
         
         for (const row of filtered) {
-            const routeId = row.RouteId;
+            const routeId = row.RouteId || row.Routeld;
             const dir = parseInt(row.Direction);
             const time = timeToMinutes(row.TripSourceTime);
             const dur = parseDuration(row.Duration);
