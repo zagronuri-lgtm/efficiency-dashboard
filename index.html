@@ -551,7 +551,7 @@
         if (!dateStr) return true;
         try {
             const p = dateStr.split('/');
-            const date = new Date(parseInt(p[2]), parseInt(p[1])-1, parseInt(p[0]));
+                        let year = parseInt(p[2]); if (year < 100) year += year < 50 ? 2000 : 1900; const date = new Date(year, parseInt(p[1])-1, parseInt(p[0]));
             if (excludeDates.has(date.toISOString().split('T')[0])) return true;
             if (document.getElementById('excludeWeekends').checked && (date.getDay()===5||date.getDay()===6)) return true;
         } catch(e) { return true; }
