@@ -687,7 +687,7 @@
             const routeId = row.RouteId || row.Routeld;
             const dir = parseInt(row.Direction);
             const time = timeToMinutes(row.TripSourceTime);
-            const dur = parseDuration(row.Duration);
+            let dur = parseDuration(row.Duration); if (!dur || dur <= 0) dur = parseDuration(row['Duration_Percentile_50']) || parseDuration(row['Duration_Percentile_75']) || parseDuration(row['Duration_Percentile_80']);
             
             if (!routeId || isNaN(dir) || time === null || dur === null || dur <= 0 || dur > 180) continue;
             
