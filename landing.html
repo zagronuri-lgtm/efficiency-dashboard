@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TransitDivert — AI-Powered Traffic Diversion for Bus Operations</title>
+    <meta name="description" content="Turn email disruption alerts into approved bus diversion announcements in minutes. Built for transit planners by transit planners.">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0a0e1a; --bg-2: #11172a; --card: #161d33;
+            --primary: #3b82f6; --primary-2: #06b6d4;
+            --accent: #f59e0b; --success: #22c55e;
+            --text: #f1f5f9; --text-muted: #94a3b8; --border: #1e293b;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html { scroll-behavior: smooth; }
+        body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; overflow-x: hidden; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 0 1.5rem; }
+
+        /* Navigation */
+        nav { position: sticky; top: 0; background: rgba(10,14,26,0.85); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); z-index: 100; padding: 1rem 0; }
+        .nav-inner { display: flex; justify-content: space-between; align-items: center; }
+        .logo { font-size: 1.4rem; font-weight: 800; background: linear-gradient(135deg, var(--primary), var(--primary-2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .nav-links { display: flex; gap: 2rem; align-items: center; }
+        .nav-links a { color: var(--text-muted); text-decoration: none; font-size: 0.95rem; font-weight: 500; transition: 0.2s; }
+        .nav-links a:hover { color: var(--text); }
+        .btn { padding: 0.7rem 1.4rem; border-radius: 10px; border: none; cursor: pointer; font-family: inherit; font-weight: 600; font-size: 0.95rem; transition: all 0.2s; display: inline-flex; align-items: center; gap: 0.5rem; text-decoration: none; }
+        .btn-primary { background: linear-gradient(135deg, var(--primary), var(--primary-2)); color: white; }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 10px 25px rgba(59,130,246,0.4); }
+        .btn-ghost { background: transparent; color: var(--text); border: 1px solid var(--border); }
+        .btn-ghost:hover { border-color: var(--primary); }
+        .btn-lg { padding: 1rem 2rem; font-size: 1.05rem; }
+
+        /* Hero */
+        .hero { padding: 5rem 0 4rem; text-align: center; position: relative; }
+        .hero::before { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at top, rgba(59,130,246,0.2), transparent 70%); pointer-events: none; }
+        .badge { display: inline-block; padding: 0.4rem 1rem; background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.3); color: var(--primary); border-radius: 999px; font-size: 0.85rem; font-weight: 600; margin-bottom: 1.5rem; }
+        h1 { font-size: clamp(2.2rem, 5vw, 3.8rem); font-weight: 900; line-height: 1.1; margin-bottom: 1.5rem; letter-spacing: -0.02em; }
+        h1 .grad { background: linear-gradient(135deg, var(--primary), var(--primary-2), var(--accent)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .hero p { font-size: 1.2rem; color: var(--text-muted); max-width: 720px; margin: 0 auto 2.5rem; }
+        .hero-cta { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+        .hero-meta { margin-top: 2rem; color: var(--text-muted); font-size: 0.9rem; display: flex; gap: 2rem; justify-content: center; flex-wrap: wrap; }
+        .hero-meta span { display: inline-flex; align-items: center; gap: 0.4rem; }
+
+        /* Demo screenshot */
+        .demo { margin: 3rem auto 0; max-width: 1000px; padding: 0 1rem; position: relative; }
+        .demo-frame { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 1rem; box-shadow: 0 25px 60px rgba(0,0,0,0.4); }
+        .demo-bar { display: flex; gap: 0.4rem; padding-bottom: 0.8rem; }
+        .demo-bar span { width: 12px; height: 12px; border-radius: 50%; background: var(--border); }
+        .demo-bar span:nth-child(1) { background: #ef4444; }
+        .demo-bar span:nth-child(2) { background: #f59e0b; }
+        .demo-bar span:nth-child(3) { background: #22c55e; }
+        .demo-content { background: white; border-radius: 10px; padding: 2rem; color: #0f172a; min-height: 320px; }
+        .demo-flow { display: grid; grid-template-columns: repeat(6, 1fr); gap: 0.5rem; margin-bottom: 1.5rem; }
+        .demo-flow div { background: #eff6ff; padding: 0.6rem; border-radius: 6px; text-align: center; font-size: 0.7rem; font-weight: 600; color: #1e40af; }
+        .demo-flow div.active { background: #3b82f6; color: white; }
+        .demo-content h3 { font-size: 1.1rem; margin-bottom: 1rem; }
+        .demo-content p { font-size: 0.9rem; color: #475569; margin-bottom: 0.5rem; }
+
+        /* Sections */
+        section { padding: 5rem 0; }
+        .section-title { text-align: center; max-width: 700px; margin: 0 auto 3rem; }
+        .section-title h2 { font-size: 2.4rem; font-weight: 800; margin-bottom: 1rem; letter-spacing: -0.01em; }
+        .section-title p { color: var(--text-muted); font-size: 1.1rem; }
+        .section-eyebrow { color: var(--primary); font-weight: 600; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.5rem; }
+
+        /* Problem */
+        .problem { background: var(--bg-2); }
+        .problem-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 2rem; }
+        .problem-card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 2rem; }
+        .problem-card .icon { font-size: 2.2rem; margin-bottom: 1rem; }
+        .problem-card h3 { font-size: 1.2rem; margin-bottom: 0.6rem; }
+        .problem-card p { color: var(--text-muted); font-size: 0.95rem; }
+
+        /* Features */
+        .features-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.5rem; }
+        .feature { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 2rem; transition: 0.2s; }
+        .feature:hover { border-color: var(--primary); transform: translateY(-4px); }
+        .feature .num { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 10px; background: linear-gradient(135deg, var(--primary), var(--primary-2)); color: white; font-weight: 800; margin-bottom: 1rem; }
+        .feature h3 { font-size: 1.2rem; margin-bottom: 0.6rem; }
+        .feature p { color: var(--text-muted); font-size: 0.95rem; }
+
+        /* Pricing */
+        .pricing { background: var(--bg-2); }
+        .pricing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; max-width: 1000px; margin: 0 auto; }
+        .price-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 2.5rem 2rem; position: relative; }
+        .price-card.featured { border-color: var(--primary); box-shadow: 0 20px 40px rgba(59,130,246,0.2); transform: scale(1.03); }
+        .price-card.featured::before { content: 'MOST POPULAR'; position: absolute; top: -12px; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, var(--primary), var(--primary-2)); color: white; padding: 0.3rem 0.9rem; border-radius: 999px; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.05em; }
+        .price-card h3 { font-size: 1.3rem; margin-bottom: 0.5rem; }
+        .price-card .desc { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.5rem; }
+        .price { display: flex; align-items: baseline; gap: 0.3rem; margin-bottom: 1.5rem; }
+        .price .amount { font-size: 3rem; font-weight: 800; }
+        .price .period { color: var(--text-muted); font-size: 0.95rem; }
+        .features-list { list-style: none; margin-bottom: 2rem; }
+        .features-list li { padding: 0.5rem 0; color: var(--text); font-size: 0.95rem; display: flex; gap: 0.6rem; align-items: center; }
+        .features-list li::before { content: '✓'; color: var(--success); font-weight: 800; }
+        .price-card .btn { width: 100%; justify-content: center; }
+
+        /* FAQ */
+        .faq-list { max-width: 800px; margin: 0 auto; }
+        .faq-item { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem 1.5rem; margin-bottom: 0.8rem; cursor: pointer; transition: 0.2s; }
+        .faq-item:hover { border-color: var(--primary); }
+        .faq-q { display: flex; justify-content: space-between; align-items: center; font-weight: 600; }
+        .faq-q::after { content: '+'; font-size: 1.5rem; color: var(--text-muted); transition: 0.2s; }
+        .faq-item[open] .faq-q::after { content: '−'; color: var(--primary); }
+        .faq-a { margin-top: 1rem; color: var(--text-muted); font-size: 0.95rem; line-height: 1.7; }
+
+        /* CTA */
+        .cta-final { background: linear-gradient(135deg, rgba(59,130,246,0.15), rgba(6,182,212,0.15)); border: 1px solid var(--border); border-radius: 24px; padding: 4rem 2rem; text-align: center; max-width: 900px; margin: 0 auto; }
+        .cta-final h2 { font-size: 2.2rem; font-weight: 800; margin-bottom: 1rem; }
+        .cta-final p { color: var(--text-muted); font-size: 1.1rem; margin-bottom: 2rem; }
+
+        /* Footer */
+        footer { background: var(--bg-2); border-top: 1px solid var(--border); padding: 3rem 0 2rem; margin-top: 4rem; }
+        .footer-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 2rem; margin-bottom: 2rem; }
+        @media (max-width: 700px) { .footer-grid { grid-template-columns: 1fr 1fr; } }
+        .footer-col h4 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 1rem; }
+        .footer-col a { display: block; color: var(--text); text-decoration: none; padding: 0.3rem 0; font-size: 0.95rem; }
+        .footer-col a:hover { color: var(--primary); }
+        .footer-bottom { padding-top: 2rem; border-top: 1px solid var(--border); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 1rem; color: var(--text-muted); font-size: 0.85rem; }
+
+        /* Modal */
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: none; align-items: center; justify-content: center; z-index: 1000; padding: 1rem; }
+        .modal-overlay.show { display: flex; }
+        .modal { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 2rem; max-width: 500px; width: 100%; }
+        .modal h3 { margin-bottom: 1rem; }
+        .modal p { color: var(--text-muted); margin-bottom: 1.5rem; }
+        .modal input { width: 100%; padding: 0.8rem; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-family: inherit; font-size: 0.95rem; margin-bottom: 1rem; }
+
+        @media (max-width: 700px) {
+            .nav-links a:not(.btn) { display: none; }
+            .price-card.featured { transform: none; }
+            .demo-flow { grid-template-columns: repeat(3, 1fr); }
+        }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="container nav-inner">
+        <div class="logo">🚌 TransitDivert</div>
+        <div class="nav-links">
+            <a href="#features">Features</a>
+            <a href="#pricing">Pricing</a>
+            <a href="#faq">FAQ</a>
+            <a href="#pricing" class="btn btn-primary">Get Started</a>
+        </div>
+    </div>
+</nav>
+
+<section class="hero">
+    <div class="container">
+        <div class="badge">⚡ Built by transit planners, powered by AI</div>
+        <h1>Turn disruption emails into <span class="grad">approved bus diversions</span> in minutes — not hours.</h1>
+        <p>TransitDivert reads your incoming traffic disruption notices (Word, PowerPoint, email) and automatically identifies affected bus routes, recommends operationally-sound diversions, drafts the public announcement, and routes it for manager approval.</p>
+        <div class="hero-cta">
+            <a href="#pricing" class="btn btn-primary btn-lg">Start Free Trial →</a>
+            <a href="#demo" class="btn btn-ghost btn-lg">See it in Action</a>
+        </div>
+        <div class="hero-meta">
+            <span>✓ No credit card required</span>
+            <span>✓ Setup in under 10 minutes</span>
+            <span>✓ Works with Outlook & Word</span>
+        </div>
+
+        <div class="demo" id="demo">
+            <div class="demo-frame">
+                <div class="demo-bar"><span></span><span></span><span></span></div>
+                <div class="demo-content">
+                    <div class="demo-flow">
+                        <div class="active">1. Upload</div>
+                        <div>2. Extract</div>
+                        <div>3. Routes</div>
+                        <div>4. Diversion</div>
+                        <div>5. Word Doc</div>
+                        <div>6. Approve</div>
+                    </div>
+                    <h3>📎 Disruption Document Loaded</h3>
+                    <p><strong>Source:</strong> Email from Public Works — "Main St. closure for water main repair"</p>
+                    <p><strong>AI extracted:</strong> Closure of Main St between 5th &amp; 7th, May 11–14, 22:00 to 05:00</p>
+                    <p><strong>Affected routes:</strong> 14, 22, 89 (during operating hours: only 14 and 89)</p>
+                    <p style="color: #16a34a; font-weight: 600; margin-top: 0.8rem;">→ Recommended diversion ready in 12 seconds</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="problem">
+    <div class="container">
+        <div class="section-title">
+            <div class="section-eyebrow">The Daily Reality</div>
+            <h2>Traffic planners waste hours every day on disruption paperwork</h2>
+        </div>
+        <div class="problem-grid">
+            <div class="problem-card">
+                <div class="icon">📧</div>
+                <h3>Disruption notices are chaos</h3>
+                <p>They come from contractors, municipalities, police, events. Each in a different format — email body, Word, PowerPoint, even photos.</p>
+            </div>
+            <div class="problem-card">
+                <div class="icon">🗺️</div>
+                <h3>Route impact is manual</h3>
+                <p>Cross-referencing every disruption against bus routes and timetables takes 30+ minutes per event. And humans miss things.</p>
+            </div>
+            <div class="problem-card">
+                <div class="icon">📝</div>
+                <h3>Announcements take forever</h3>
+                <p>Drafting the public message, getting manager approval, formatting for distribution — all while the next disruption is already in your inbox.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section id="features">
+    <div class="container">
+        <div class="section-title">
+            <div class="section-eyebrow">How it Works</div>
+            <h2>From email to approved announcement in 6 guided steps</h2>
+        </div>
+        <div class="features-grid">
+            <div class="feature">
+                <div class="num">1</div>
+                <h3>Upload Anything</h3>
+                <p>Drag in Word, PowerPoint, .eml emails — or paste text directly. Our parser handles every format.</p>
+            </div>
+            <div class="feature">
+                <div class="num">2</div>
+                <h3>AI Extracts Details</h3>
+                <p>Claude reads the document and pulls out: location, dates, severity, affected streets, and even original sender.</p>
+            </div>
+            <div class="feature">
+                <div class="num">3</div>
+                <h3>Find Affected Routes</h3>
+                <p>Cross-references your GTFS data and your custom appendix to identify exactly which bus routes are impacted — and during which operating hours.</p>
+            </div>
+            <div class="feature">
+                <div class="num">4</div>
+                <h3>Smart Diversion</h3>
+                <p>AI recommends rerouting that respects bus constraints: lane width, turning radius, bridge clearance, accessibility stops.</p>
+            </div>
+            <div class="feature">
+                <div class="num">5</div>
+                <h3>Word Doc Output</h3>
+                <p>Generates a polished, branded RTL/LTR announcement in Word — ready to attach, print, or post.</p>
+            </div>
+            <div class="feature">
+                <div class="num">6</div>
+                <h3>Manager Approval</h3>
+                <p>One click sends a draft to your traffic manager with an approval link. Approved → announcement is dispatched to your distribution list.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section id="pricing" class="pricing">
+    <div class="container">
+        <div class="section-title">
+            <div class="section-eyebrow">Pricing</div>
+            <h2>Simple, transparent pricing</h2>
+            <p>Pay once, own it forever. No subscriptions. No usage caps. You bring your own AI key — pay only for what you use.</p>
+        </div>
+        <div class="pricing-grid">
+            <div class="price-card">
+                <h3>Single Planner</h3>
+                <div class="desc">For one transit planner</div>
+                <div class="price"><span class="amount">$499</span><span class="period">/ one-time</span></div>
+                <ul class="features-list">
+                    <li>Full app — install on your machine</li>
+                    <li>Works with any GTFS feed</li>
+                    <li>Unlimited disruption events</li>
+                    <li>Word document export</li>
+                    <li>Email approval workflow</li>
+                    <li>1 year of updates</li>
+                </ul>
+                <a href="#" class="btn btn-ghost" onclick="openCheckout('single', 499); return false;">Get Started</a>
+            </div>
+            <div class="price-card featured">
+                <h3>Department</h3>
+                <div class="desc">For a planning team (up to 10)</div>
+                <div class="price"><span class="amount">$1,499</span><span class="period">/ one-time</span></div>
+                <ul class="features-list">
+                    <li>Everything in Single Planner</li>
+                    <li>Up to 10 named users</li>
+                    <li>Custom appendix integration</li>
+                    <li>Branded Word templates</li>
+                    <li>Outlook integration setup</li>
+                    <li>2 years of updates</li>
+                    <li>Priority email support</li>
+                </ul>
+                <a href="#" class="btn btn-primary" onclick="openCheckout('department', 1499); return false;">Get Started</a>
+            </div>
+            <div class="price-card">
+                <h3>Agency Enterprise</h3>
+                <div class="desc">For full transit authorities</div>
+                <div class="price"><span class="amount">Custom</span></div>
+                <ul class="features-list">
+                    <li>Everything in Department</li>
+                    <li>Unlimited users</li>
+                    <li>SSO / SAML integration</li>
+                    <li>On-premise deployment option</li>
+                    <li>Custom GTFS pipeline</li>
+                    <li>Dedicated training session</li>
+                    <li>SLA &amp; phone support</li>
+                </ul>
+                <a href="mailto:sales@transitdivert.com?subject=Enterprise%20Inquiry" class="btn btn-ghost">Contact Sales</a>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section id="faq">
+    <div class="container">
+        <div class="section-title">
+            <div class="section-eyebrow">Questions</div>
+            <h2>Frequently asked questions</h2>
+        </div>
+        <div class="faq-list">
+            <details class="faq-item"><summary class="faq-q">What do I need to run TransitDivert?</summary>
+                <div class="faq-a">A modern web browser (Chrome, Edge, Firefox, Safari), an Anthropic Claude API key (~$0.30 per event in usage), and your transit system's GTFS data. That's it. No servers, no installations beyond opening an HTML file.</div>
+            </details>
+            <details class="faq-item"><summary class="faq-q">Does it work for non-Israeli transit systems?</summary>
+                <div class="faq-a">Yes. The app supports any standard GTFS feed (NY MTA, London TfL, STM Montreal, Tel Aviv Egged, etc.). The Department and Enterprise plans include configuration assistance for your specific feed.</div>
+            </details>
+            <details class="faq-item"><summary class="faq-q">Is my data secure?</summary>
+                <div class="faq-a">Disruption documents are processed locally in your browser. Only the extracted text is sent to Anthropic's Claude API for analysis (governed by Anthropic's enterprise data policies — they don't train on your data). Nothing is stored on our servers.</div>
+            </details>
+            <details class="faq-item"><summary class="faq-q">How accurate is the AI?</summary>
+                <div class="faq-a">Very accurate at extracting structured data from disruption notices and identifying affected routes. Diversion recommendations are AI suggestions reviewed by your traffic manager — they're a starting point, not the final word. The approval workflow ensures human oversight.</div>
+            </details>
+            <details class="faq-item"><summary class="faq-q">Can I customize the Word output?</summary>
+                <div class="faq-a">Yes. Department and Enterprise plans include branded Word templates with your agency's logo, header, and formatting. The output respects RTL languages (Hebrew, Arabic) and LTR languages.</div>
+            </details>
+            <details class="faq-item"><summary class="faq-q">What if it doesn't work for my use case?</summary>
+                <div class="faq-a">14-day money-back guarantee, no questions asked. Email us within 14 days of purchase for a full refund.</div>
+            </details>
+            <details class="faq-item"><summary class="faq-q">Do you have a free trial?</summary>
+                <div class="faq-a">Yes — request a demo and we'll send you a 7-day evaluation key. No credit card required.</div>
+            </details>
+        </div>
+    </div>
+</section>
+
+<section>
+    <div class="container">
+        <div class="cta-final">
+            <h2>Stop drafting diversion announcements by hand.</h2>
+            <p>Join transit planners who reclaim 5+ hours per week with TransitDivert.</p>
+            <div class="hero-cta">
+                <a href="#pricing" class="btn btn-primary btn-lg">Get Started — $499</a>
+                <a href="mailto:hello@transitdivert.com" class="btn btn-ghost btn-lg">Talk to Us</a>
+            </div>
+        </div>
+    </div>
+</section>
+
+<footer>
+    <div class="container">
+        <div class="footer-grid">
+            <div class="footer-col">
+                <div class="logo" style="margin-bottom: 1rem;">🚌 TransitDivert</div>
+                <p style="color: var(--text-muted); font-size: 0.95rem; max-width: 320px;">AI-powered traffic diversion management for public transit operators worldwide.</p>
+            </div>
+            <div class="footer-col">
+                <h4>Product</h4>
+                <a href="#features">Features</a>
+                <a href="#pricing">Pricing</a>
+                <a href="#faq">FAQ</a>
+            </div>
+            <div class="footer-col">
+                <h4>Company</h4>
+                <a href="mailto:hello@transitdivert.com">Contact</a>
+                <a href="#">About</a>
+                <a href="#">Blog</a>
+            </div>
+            <div class="footer-col">
+                <h4>Legal</h4>
+                <a href="#">Privacy</a>
+                <a href="#">Terms</a>
+                <a href="#">Refund Policy</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <div>© 2026 TransitDivert. All rights reserved.</div>
+            <div>Made for transit planners, by transit planners.</div>
+        </div>
+    </div>
+</footer>
+
+<!-- Checkout Modal -->
+<div class="modal-overlay" id="checkoutModal" onclick="if(event.target===this)closeCheckout()">
+    <div class="modal">
+        <h3>Complete Your Purchase</h3>
+        <p id="checkoutDesc">Enter your email and you'll be redirected to secure Stripe checkout.</p>
+        <input type="email" id="checkoutEmail" placeholder="your@email.com" required>
+        <a href="#" id="checkoutBtn" class="btn btn-primary" style="width:100%; justify-content:center;" onclick="proceedCheckout(); return false;">Proceed to Stripe Checkout →</a>
+        <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 1rem; text-align: center;">🔒 Secured by Stripe. 14-day money-back guarantee.</p>
+        <button class="btn btn-ghost" style="width:100%; margin-top:0.5rem; justify-content:center;" onclick="closeCheckout()">Cancel</button>
+    </div>
+</div>
+
+<script>
+// =====================================================================
+// REPLACE THESE WITH YOUR ACTUAL STRIPE PAYMENT LINKS
+// Create them at: https://dashboard.stripe.com/payment-links
+// =====================================================================
+const STRIPE_LINKS = {
+    single:     'https://buy.stripe.com/REPLACE_WITH_YOUR_LINK_SINGLE',
+    department: 'https://buy.stripe.com/REPLACE_WITH_YOUR_LINK_DEPARTMENT'
+};
+// =====================================================================
+
+let currentPlan = null;
+
+function openCheckout(plan, price) {
+    currentPlan = plan;
+    document.getElementById('checkoutDesc').textContent =
+        `${plan === 'single' ? 'Single Planner' : 'Department'} — $${price} one-time. Enter your email below.`;
+    document.getElementById('checkoutModal').classList.add('show');
+    document.getElementById('checkoutEmail').focus();
+}
+
+function closeCheckout() {
+    document.getElementById('checkoutModal').classList.remove('show');
+}
+
+function proceedCheckout() {
+    const email = document.getElementById('checkoutEmail').value.trim();
+    if (!email || !email.includes('@')) {
+        alert('Please enter a valid email address.');
+        return;
+    }
+    const link = STRIPE_LINKS[currentPlan];
+    if (link.includes('REPLACE_WITH')) {
+        alert('Stripe Payment Link not yet configured.\n\nTo set up:\n1. Go to https://dashboard.stripe.com/payment-links\n2. Create a payment link for each plan\n3. Replace STRIPE_LINKS in landing.html');
+        return;
+    }
+    // Stripe accepts prefilled email via query param
+    const url = `${link}?prefilled_email=${encodeURIComponent(email)}`;
+    window.location.href = url;
+}
+
+// Smooth scroll for anchor links
+document.querySelectorAll('a[href^="#"]').forEach(a => {
+    a.addEventListener('click', e => {
+        const target = document.querySelector(a.getAttribute('href'));
+        if (target) { e.preventDefault(); target.scrollIntoView({ behavior: 'smooth' }); }
+    });
+});
+</script>
+</body>
+</html>
