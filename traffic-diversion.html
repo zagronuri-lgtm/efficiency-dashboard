@@ -1,0 +1,1068 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>מערכת ניתוח הסטות תנועה אוטובוסים</title>
+    <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/docx/8.5.0/docx.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        :root {
+            --bg-primary: #f8fafc; --bg-card: #ffffff; --bg-soft: #f1f5f9;
+            --primary: #2563eb; --primary-dark: #1d4ed8;
+            --success: #16a34a; --warning: #f59e0b; --danger: #dc2626;
+            --text: #0f172a; --text-muted: #64748b; --border: #e2e8f0;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Heebo', sans-serif; background: var(--bg-primary); color: var(--text); min-height: 100vh; }
+        .container { max-width: 1400px; margin: 0 auto; padding: 1.5rem; }
+        .header { background: linear-gradient(135deg, #1e3a8a, #2563eb); color: white; padding: 1.5rem 2rem; border-radius: 16px; margin-bottom: 1.5rem; box-shadow: 0 10px 30px rgba(37,99,235,0.2); }
+        .header h1 { font-size: 1.8rem; font-weight: 800; }
+        .header p { font-size: 0.95rem; opacity: 0.9; margin-top: 0.25rem; }
+        .header-row { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+        .card { background: var(--bg-card); border-radius: 14px; padding: 1.5rem; margin-bottom: 1.25rem; box-shadow: 0 2px 8px rgba(0,0,0,0.04); border: 1px solid var(--border); }
+        .card h2 { font-size: 1.25rem; font-weight: 700; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.6rem; }
+        .step-num { background: var(--primary); color: white; width: 32px; height: 32px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.95rem; font-weight: 700; }
+        .step-num.done { background: var(--success); }
+        .upload-zone { border: 2px dashed var(--border); border-radius: 12px; padding: 2rem; text-align: center; cursor: pointer; transition: 0.2s; background: var(--bg-soft); }
+        .upload-zone:hover { border-color: var(--primary); background: #eff6ff; }
+        .upload-zone.drag { border-color: var(--success); background: #f0fdf4; }
+        .upload-zone.has { border-color: var(--success); background: #f0fdf4; }
+        .upload-zone input { display: none; }
+        .upload-icon { font-size: 2.5rem; margin-bottom: 0.5rem; }
+        .btn { padding: 0.7rem 1.4rem; border-radius: 10px; border: none; cursor: pointer; font-family: inherit; font-weight: 600; font-size: 0.95rem; transition: all 0.15s; display: inline-flex; align-items: center; gap: 0.5rem; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover:not(:disabled) { background: var(--primary-dark); transform: translateY(-1px); }
+        .btn-success { background: var(--success); color: white; }
+        .btn-success:hover:not(:disabled) { background: #15803d; }
+        .btn-warning { background: var(--warning); color: white; }
+        .btn-secondary { background: var(--bg-soft); color: var(--text); border: 1px solid var(--border); }
+        .btn-secondary:hover { background: #e2e8f0; }
+        .btn-sm { padding: 0.4rem 0.8rem; font-size: 0.8rem; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+        @media (max-width: 800px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+        .field { margin-bottom: 0.85rem; }
+        .field label { display: block; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.3rem; }
+        .field input, .field textarea, .field select { width: 100%; padding: 0.6rem 0.8rem; border: 1px solid var(--border); border-radius: 8px; font-family: inherit; font-size: 0.9rem; background: white; }
+        .field input:focus, .field textarea:focus, .field select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+        .field textarea { min-height: 90px; resize: vertical; }
+        .file-list { margin-top: 1rem; text-align: right; }
+        .file-item { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.75rem; background: white; border-radius: 8px; margin-bottom: 0.4rem; border: 1px solid var(--border); font-size: 0.85rem; }
+        .file-item .remove { margin-right: auto; color: var(--danger); cursor: pointer; padding: 0.2rem 0.4rem; }
+        .badge { display: inline-block; padding: 0.2rem 0.6rem; border-radius: 999px; font-size: 0.72rem; font-weight: 600; }
+        .badge-blue { background: #dbeafe; color: #1e40af; }
+        .badge-green { background: #dcfce7; color: #166534; }
+        .badge-yellow { background: #fef3c7; color: #92400e; }
+        .badge-red { background: #fee2e2; color: #991b1b; }
+        .badge-gray { background: #f1f5f9; color: #475569; }
+        .table-wrap { overflow: auto; max-height: 400px; border: 1px solid var(--border); border-radius: 10px; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+        th, td { padding: 0.6rem 0.7rem; text-align: right; border-bottom: 1px solid var(--border); }
+        th { background: var(--bg-soft); font-weight: 700; position: sticky; top: 0; font-size: 0.8rem; color: var(--text-muted); }
+        tbody tr:hover { background: #f8fafc; }
+        .alert { padding: 0.85rem 1rem; border-radius: 10px; margin-bottom: 1rem; font-size: 0.9rem; display: flex; gap: 0.6rem; align-items: flex-start; }
+        .alert-info { background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; }
+        .alert-warning { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; }
+        .alert-success { background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; }
+        .alert-error { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
+        .loader { display: inline-block; width: 18px; height: 18px; border: 3px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        #map { height: 380px; border-radius: 10px; border: 1px solid var(--border); }
+        .summary-box { background: var(--bg-soft); border-radius: 10px; padding: 1rem; margin: 0.6rem 0; }
+        .kv { display: flex; gap: 0.6rem; padding: 0.4rem 0; font-size: 0.9rem; border-bottom: 1px dashed var(--border); }
+        .kv:last-child { border-bottom: none; }
+        .kv .k { font-weight: 600; color: var(--text-muted); min-width: 130px; }
+        .stage { display: none; }
+        .stage.active { display: block; }
+        .progress-bar { display: flex; gap: 0.3rem; margin-bottom: 1.5rem; }
+        .progress-step { flex: 1; padding: 0.6rem; text-align: center; background: var(--bg-soft); border-radius: 8px; font-size: 0.78rem; font-weight: 600; color: var(--text-muted); border: 2px solid transparent; transition: 0.2s; cursor: pointer; }
+        .progress-step.active { background: var(--primary); color: white; border-color: var(--primary); }
+        .progress-step.done { background: #dcfce7; color: var(--success); border-color: var(--success); }
+        .checkbox-row { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; }
+        .checkbox-row input { width: 18px; height: 18px; }
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 1000; }
+        .modal-overlay.show { display: flex; }
+        .modal { background: white; border-radius: 14px; padding: 1.5rem; max-width: 600px; width: 90%; max-height: 85vh; overflow: auto; }
+        .word-preview { background: white; border: 1px solid var(--border); border-radius: 10px; padding: 1.5rem; line-height: 1.7; min-height: 200px; }
+        .word-preview h3 { font-size: 1.1rem; margin-bottom: 0.6rem; color: var(--primary); }
+        .word-preview p { margin-bottom: 0.6rem; }
+        .small-muted { font-size: 0.75rem; color: var(--text-muted); }
+        details { background: var(--bg-soft); border-radius: 8px; padding: 0.6rem 0.9rem; margin-bottom: 0.6rem; }
+        summary { cursor: pointer; font-weight: 600; font-size: 0.9rem; }
+        details[open] summary { margin-bottom: 0.6rem; }
+        .api-status { display: inline-flex; gap: 0.4rem; align-items: center; font-size: 0.75rem; color: var(--text-muted); }
+        .api-dot { width: 8px; height: 8px; border-radius: 50%; background: #cbd5e1; }
+        .api-dot.ok { background: var(--success); }
+        .api-dot.bad { background: var(--danger); }
+        .approval-link { display: block; padding: 1rem; background: linear-gradient(135deg, #fef3c7, #fde68a); border-radius: 10px; text-align: center; font-weight: 700; color: #92400e; text-decoration: none; }
+        .approval-link:hover { background: linear-gradient(135deg, #fde68a, #fcd34d); }
+    </style>
+</head>
+<body>
+
+<div id="approvalView" style="display:none; padding: 2rem;"></div>
+
+<div class="container" id="mainView">
+    <div class="header">
+        <div class="header-row">
+            <div>
+                <h1>🚌 מערכת ניתוח הסטות תנועה לאוטובוסים</h1>
+                <p>זיהוי קווים מושפעים, המלצת מסלולי הסטה, יצירת הודעה ב-Word ושליחה לאישור</p>
+            </div>
+            <div>
+                <button class="btn btn-secondary btn-sm" onclick="openSettings()">⚙️ הגדרות</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="progress-bar">
+        <div class="progress-step active" data-stage="1">1. טעינת מסמך</div>
+        <div class="progress-step" data-stage="2">2. ניתוח אירוע</div>
+        <div class="progress-step" data-stage="3">3. קווים מושפעים</div>
+        <div class="progress-step" data-stage="4">4. הסטה מוצעת</div>
+        <div class="progress-step" data-stage="5">5. הודעה ב-Word</div>
+        <div class="progress-step" data-stage="6">6. אישור ושליחה</div>
+    </div>
+
+    <!-- שלב 1: העלאת מסמך -->
+    <div class="stage active" id="stage1">
+        <div class="card">
+            <h2><span class="step-num">1</span> טעינת המסמך עם פרטי שיבוש התנועה</h2>
+            <div class="alert alert-info">
+                <span>ℹ️</span>
+                <div>ניתן לטעון קובץ Word (.docx), מצגת PowerPoint (.pptx), קובץ אימייל (.eml) או טקסט (.txt). ניתן גם להדביק את הטקסט ישירות למטה.</div>
+            </div>
+            <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+                <div class="upload-icon">📎</div>
+                <div style="font-size: 1rem; font-weight: 600;">גרור לכאן קבצים או לחץ לבחירה</div>
+                <div class="small-muted" style="margin-top: 0.4rem;">.docx, .pptx, .eml, .txt</div>
+                <input type="file" id="fileInput" multiple accept=".docx,.pptx,.eml,.txt,.msg">
+            </div>
+            <div class="file-list" id="fileList"></div>
+            <div class="field" style="margin-top: 1rem;">
+                <label>או הדבק טקסט ישירות:</label>
+                <textarea id="manualText" placeholder="הדבק כאן את תוכן ההודעה / האימייל / המסמך..."></textarea>
+            </div>
+            <div style="display: flex; gap: 0.6rem; margin-top: 1rem;">
+                <button class="btn btn-primary" id="btnAnalyze" onclick="analyzeDocument()" disabled>🔍 נתח את האירוע</button>
+                <button class="btn btn-secondary" onclick="loadExample()">📋 דוגמה לבדיקה</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- שלב 2: ניתוח אירוע -->
+    <div class="stage" id="stage2">
+        <div class="card">
+            <h2><span class="step-num">2</span> פרטי השיבוש שזוהו</h2>
+            <div id="extractionResult"></div>
+            <div class="grid-2">
+                <div class="field"><label>סוג האירוע</label><input type="text" id="eventType"></div>
+                <div class="field"><label>חומרה</label>
+                    <select id="eventSeverity">
+                        <option value="low">נמוכה</option>
+                        <option value="medium" selected>בינונית</option>
+                        <option value="high">גבוהה</option>
+                        <option value="critical">קריטית</option>
+                    </select>
+                </div>
+                <div class="field"><label>כתובת / מיקום (לזיהוי קווים)</label><input type="text" id="eventLocation" placeholder="לדוגמה: דרך נמיר תל אביב"></div>
+                <div class="field"><label>עיר</label><input type="text" id="eventCity" placeholder="תל אביב"></div>
+                <div class="field"><label>תאריך התחלה</label><input type="datetime-local" id="eventStart"></div>
+                <div class="field"><label>תאריך סיום</label><input type="datetime-local" id="eventEnd"></div>
+            </div>
+            <div class="field"><label>תיאור מלא</label><textarea id="eventDescription"></textarea></div>
+            <div class="field">
+                <label>שעות שמסומנות כ"שעות עבודה" (לחישוב השפעה)</label>
+                <input type="text" id="workingHours" value="06:00-22:00" placeholder="06:00-22:00">
+                <div class="small-muted">המערכת תזהיר אם השיבוש חופף לשעות הפעילות של האוטובוסים</div>
+            </div>
+            <div style="display: flex; gap: 0.6rem; margin-top: 1rem;">
+                <button class="btn btn-secondary" onclick="goToStage(1)">← חזור</button>
+                <button class="btn btn-primary" onclick="findAffectedLines()">🚌 מצא קווים מושפעים →</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- שלב 3: קווים מושפעים -->
+    <div class="stage" id="stage3">
+        <div class="card">
+            <h2><span class="step-num">3</span> קווים מושפעים</h2>
+            <div id="linesAlert"></div>
+            <div class="grid-2">
+                <div>
+                    <div class="alert alert-info"><span>📍</span><div>הקווים זוהו לפי תחנות בסביבת המיקום ו/או נספח הקווים שטענת.</div></div>
+                    <div class="table-wrap">
+                        <table id="linesTable">
+                            <thead><tr><th>בחר</th><th>מס' קו</th><th>תיאור</th><th>מפעיל</th><th>בשעות פעילות</th></tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                    <div style="margin-top: 0.6rem;">
+                        <button class="btn btn-secondary btn-sm" onclick="toggleAllLines(true)">בחר הכל</button>
+                        <button class="btn btn-secondary btn-sm" onclick="toggleAllLines(false)">בטל הכל</button>
+                        <span class="small-muted" id="lineCount" style="margin-right: 0.6rem;"></span>
+                    </div>
+                </div>
+                <div>
+                    <div id="map"></div>
+                </div>
+            </div>
+            <details style="margin-top: 1rem;">
+                <summary>טען נספח קווים ידני (Excel/CSV)</summary>
+                <div class="small-muted" style="margin-bottom: 0.5rem;">קובץ Excel עם עמודות: מס' קו, תיאור, רחובות / תחנות. ישמש כמקור משלים לזיהוי קווים.</div>
+                <input type="file" id="appendixFile" accept=".xlsx,.xls,.csv" onchange="loadAppendix(event)">
+                <div id="appendixStatus" class="small-muted" style="margin-top: 0.5rem;"></div>
+            </details>
+            <div style="display: flex; gap: 0.6rem; margin-top: 1rem;">
+                <button class="btn btn-secondary" onclick="goToStage(2)">← חזור</button>
+                <button class="btn btn-primary" onclick="generateDiversion()">🛣️ צור הצעת הסטה →</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- שלב 4: הסטה -->
+    <div class="stage" id="stage4">
+        <div class="card">
+            <h2><span class="step-num">4</span> הסטה מוצעת</h2>
+            <div class="alert alert-warning"><span>⚠️</span><div>ההצעה לוקחת בחשבון אילוצי אוטובוסים: גובה גשרים, רוחב כביש, נטיות, תחנות נגישות, וזמני נסיעה.</div></div>
+            <div id="diversionContent"></div>
+            <div class="field"><label>תיאור ההסטה (ניתן לעריכה)</label><textarea id="diversionText" style="min-height: 180px;"></textarea></div>
+            <div class="field"><label>תחנות זמניות / מבוטלות</label><textarea id="affectedStops"></textarea></div>
+            <div style="display: flex; gap: 0.6rem; margin-top: 1rem;">
+                <button class="btn btn-secondary" onclick="goToStage(3)">← חזור</button>
+                <button class="btn btn-primary" onclick="generateMessage()">📝 צור הודעה ב-Word →</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- שלב 5: הודעה -->
+    <div class="stage" id="stage5">
+        <div class="card">
+            <h2><span class="step-num">5</span> הודעת תנועה</h2>
+            <div class="grid-2">
+                <div>
+                    <div class="field"><label>כותרת</label><input type="text" id="msgTitle"></div>
+                    <div class="field"><label>תוכן ההודעה</label><textarea id="msgBody" style="min-height: 320px;"></textarea></div>
+                    <div style="display: flex; gap: 0.6rem;">
+                        <button class="btn btn-success" onclick="downloadWord()">⬇️ הורד Word</button>
+                        <button class="btn btn-secondary" onclick="regenerateMessage()">🔄 ניסוח מחדש</button>
+                    </div>
+                </div>
+                <div>
+                    <label class="small-muted">תצוגה מקדימה:</label>
+                    <div class="word-preview" id="wordPreview"></div>
+                </div>
+            </div>
+            <div style="display: flex; gap: 0.6rem; margin-top: 1rem;">
+                <button class="btn btn-secondary" onclick="goToStage(4)">← חזור</button>
+                <button class="btn btn-primary" onclick="goToStage(6)">📧 שלח לאישור →</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- שלב 6: אישור ושליחה -->
+    <div class="stage" id="stage6">
+        <div class="card">
+            <h2><span class="step-num">6</span> שליחה לאישור מנהל התנועה ושליחה לרשימת התפוצה</h2>
+            <div class="grid-2">
+                <div>
+                    <div class="field"><label>אימייל מנהל התנועה (לאישור)</label><input type="email" id="managerEmail" placeholder="manager@mta.gov.il"></div>
+                    <div class="field"><label>רשימת תפוצה לאחר אישור (מופרד בפסיקים)</label><textarea id="recipientsList" style="min-height: 100px;" placeholder="dispatcher@mta.gov.il, ops@mta.gov.il, ..."></textarea></div>
+                    <div class="alert alert-info"><span>💡</span><div>בלחיצה על "שלח לאישור", ייפתח Outlook / לקוח האימייל המוגדר עם טיוטה מלאה למנהל. בטיוטה יופיע קישור אישור — בלחיצה עליו תיפתח טיוטה נוספת לרשימת התפוצה.</div></div>
+                    <div style="display: flex; gap: 0.6rem;">
+                        <button class="btn btn-success" onclick="sendForApproval()">📤 שלח לאישור</button>
+                        <button class="btn btn-secondary" onclick="copyApprovalLink()">📋 העתק קישור אישור</button>
+                    </div>
+                    <div id="approvalStatus" style="margin-top: 1rem;"></div>
+                </div>
+                <div>
+                    <label class="small-muted">תצוגת מייל למנהל:</label>
+                    <div class="word-preview" id="approvalPreview" style="font-size: 0.85rem;"></div>
+                </div>
+            </div>
+            <div style="display: flex; gap: 0.6rem; margin-top: 1rem;">
+                <button class="btn btn-secondary" onclick="goToStage(5)">← חזור</button>
+                <button class="btn btn-secondary" onclick="resetAll()">🆕 התחל מחדש</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Settings Modal -->
+<div class="modal-overlay" id="settingsModal">
+    <div class="modal">
+        <h2>⚙️ הגדרות מערכת</h2>
+        <div class="alert alert-warning"><span>🔒</span><div>המפתחות נשמרים מקומית בדפדפן בלבד (localStorage). אינם נשלחים לשום שרת מלבד מולץ ה-API שצויין.</div></div>
+        <div class="field"><label>Anthropic Claude API Key</label><input type="password" id="settingClaudeKey" placeholder="sk-ant-..."></div>
+        <div class="field"><label>Claude Model</label>
+            <select id="settingClaudeModel">
+                <option value="claude-opus-4-7">Claude Opus 4.7 (איכות גבוהה ביותר)</option>
+                <option value="claude-sonnet-4-6" selected>Claude Sonnet 4.6 (מומלץ – איזון מצוין)</option>
+                <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5 (מהיר וזול)</option>
+            </select>
+        </div>
+        <div class="field"><label>שם שולח (יופיע בהודעות)</label><input type="text" id="settingSenderName" placeholder="אגף תכנון התנועה - MTA"></div>
+        <div class="field"><label>כתובת אימייל שולח</label><input type="email" id="settingSenderEmail"></div>
+        <div class="field"><label>נספח קווים אישי (טקסט חופשי, מתעדכן רק בלחיצה על שמירה)</label>
+            <textarea id="settingAppendix" style="min-height: 110px;" placeholder="קו 5: דיזנגוף, אבן גבירול, יהודה הלוי..."></textarea>
+        </div>
+        <div style="display: flex; gap: 0.6rem; margin-top: 1rem;">
+            <button class="btn btn-primary" onclick="saveSettings()">💾 שמור</button>
+            <button class="btn btn-secondary" onclick="closeSettings()">ביטול</button>
+            <button class="btn btn-secondary" onclick="testClaude()">🧪 בדוק חיבור</button>
+        </div>
+        <div id="settingsStatus" style="margin-top: 0.8rem;"></div>
+    </div>
+</div>
+
+<script>
+// ============= מצב המערכת =============
+const state = {
+    files: [],
+    rawText: '',
+    extracted: null,
+    affectedLines: [],
+    selectedLines: new Set(),
+    diversion: '',
+    map: null,
+    mapMarkers: [],
+    appendix: [],
+    approvalToken: null,
+    finalMessage: null
+};
+
+const settings = {
+    claudeKey: localStorage.getItem('claudeKey') || '',
+    claudeModel: localStorage.getItem('claudeModel') || 'claude-sonnet-4-6',
+    senderName: localStorage.getItem('senderName') || 'אגף תכנון התנועה',
+    senderEmail: localStorage.getItem('senderEmail') || '',
+    appendix: localStorage.getItem('appendix') || ''
+};
+
+// ============= נתיב אישור =============
+// אם הגענו דרך קישור אישור (?approve=...), נציג את מסך האישור במקום האפליקציה
+(function checkApprovalRoute() {
+    const params = new URLSearchParams(location.search);
+    const approveData = params.get('approve');
+    if (approveData) {
+        try {
+            const data = JSON.parse(decodeURIComponent(escape(atob(approveData))));
+            renderApprovalView(data);
+        } catch (e) {
+            document.getElementById('approvalView').innerHTML = '<div class="alert alert-error">קישור אישור לא תקין</div>';
+            document.getElementById('approvalView').style.display = 'block';
+            document.getElementById('mainView').style.display = 'none';
+        }
+    }
+})();
+
+function renderApprovalView(data) {
+    document.getElementById('approvalView').style.display = 'block';
+    document.getElementById('mainView').style.display = 'none';
+    const recipientsLink = `mailto:${encodeURIComponent(data.recipients || '')}?subject=${encodeURIComponent(data.title)}&body=${encodeURIComponent(data.body)}`;
+    document.getElementById('approvalView').innerHTML = `
+      <div class="container">
+        <div class="header"><h1>✅ אישור הודעת תנועה</h1><p>אנא בדוק את ההודעה ואשר לשליחה לרשימת התפוצה</p></div>
+        <div class="card">
+            <h2>פרטי האירוע</h2>
+            <div class="kv"><span class="k">סוג:</span><span>${data.eventType||''}</span></div>
+            <div class="kv"><span class="k">מיקום:</span><span>${data.location||''}</span></div>
+            <div class="kv"><span class="k">תקופה:</span><span>${data.start||''} עד ${data.end||''}</span></div>
+            <div class="kv"><span class="k">קווים מושפעים:</span><span>${(data.lines||[]).join(', ')}</span></div>
+        </div>
+        <div class="card">
+            <h2>תוכן ההודעה</h2>
+            <div class="word-preview"><h3>${data.title}</h3><div style="white-space: pre-wrap;">${data.body}</div></div>
+        </div>
+        <div class="card">
+            <h2>אישור ושליחה</h2>
+            <div class="alert alert-warning"><span>⚠️</span><div>בלחיצה על אישור, ייפתח לקוח האימייל שלך עם הודעה מוכנה לשליחה לרשימת התפוצה. ההודעה תישלח רק לאחר שתאשר ב-Outlook.</div></div>
+            <a href="${recipientsLink}" class="approval-link" onclick="setTimeout(()=>{document.getElementById('confirmStatus').innerHTML='<div class=\\'alert alert-success\\'>✓ נפתח Outlook לשליחה — אשר את המייל בתוך Outlook להשלמת התהליך</div>'},500)">
+                ✓ אשר ופתח טיוטת מייל לתפוצה (${(data.recipients||'').split(',').filter(x=>x).length} נמענים)
+            </a>
+            <div id="confirmStatus" style="margin-top: 1rem;"></div>
+            <div style="margin-top: 1rem;"><button class="btn btn-secondary" onclick="window.close()">סגור</button></div>
+        </div>
+      </div>`;
+}
+
+// ============= הגדרות =============
+function openSettings() {
+    document.getElementById('settingClaudeKey').value = settings.claudeKey;
+    document.getElementById('settingClaudeModel').value = settings.claudeModel;
+    document.getElementById('settingSenderName').value = settings.senderName;
+    document.getElementById('settingSenderEmail').value = settings.senderEmail;
+    document.getElementById('settingAppendix').value = settings.appendix;
+    document.getElementById('settingsModal').classList.add('show');
+}
+function closeSettings() { document.getElementById('settingsModal').classList.remove('show'); }
+function saveSettings() {
+    settings.claudeKey = document.getElementById('settingClaudeKey').value.trim();
+    settings.claudeModel = document.getElementById('settingClaudeModel').value;
+    settings.senderName = document.getElementById('settingSenderName').value.trim();
+    settings.senderEmail = document.getElementById('settingSenderEmail').value.trim();
+    settings.appendix = document.getElementById('settingAppendix').value.trim();
+    localStorage.setItem('claudeKey', settings.claudeKey);
+    localStorage.setItem('claudeModel', settings.claudeModel);
+    localStorage.setItem('senderName', settings.senderName);
+    localStorage.setItem('senderEmail', settings.senderEmail);
+    localStorage.setItem('appendix', settings.appendix);
+    document.getElementById('settingsStatus').innerHTML = '<div class="alert alert-success">✓ ההגדרות נשמרו</div>';
+    setTimeout(closeSettings, 800);
+}
+async function testClaude() {
+    const status = document.getElementById('settingsStatus');
+    status.innerHTML = '<div class="alert alert-info"><div class="loader" style="border-top-color:#2563eb"></div> בודק חיבור...</div>';
+    try {
+        const key = document.getElementById('settingClaudeKey').value.trim();
+        const model = document.getElementById('settingClaudeModel').value;
+        const r = await callClaude('Reply with exactly: OK', { key, model, maxTokens: 20 });
+        if (r.includes('OK')) status.innerHTML = '<div class="alert alert-success">✓ החיבור תקין</div>';
+        else status.innerHTML = `<div class="alert alert-warning">תגובה לא צפויה: ${r.slice(0,100)}</div>`;
+    } catch (e) {
+        status.innerHTML = `<div class="alert alert-error">שגיאה: ${e.message}</div>`;
+    }
+}
+
+// ============= קריאת Claude =============
+async function callClaude(prompt, opts = {}) {
+    const key = opts.key || settings.claudeKey;
+    const model = opts.model || settings.claudeModel;
+    const maxTokens = opts.maxTokens || 2000;
+    if (!key) throw new Error('יש להזין מפתח Claude API בהגדרות');
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': key,
+            'anthropic-version': '2023-06-01',
+            'anthropic-dangerous-direct-browser-access': 'true'
+        },
+        body: JSON.stringify({ model, max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] })
+    });
+    if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(`Claude API: ${res.status} ${txt.slice(0,200)}`);
+    }
+    const data = await res.json();
+    return data.content[0].text;
+}
+
+// ============= ניווט בין שלבים =============
+function goToStage(n) {
+    document.querySelectorAll('.stage').forEach(s => s.classList.remove('active'));
+    document.getElementById('stage' + n).classList.add('active');
+    document.querySelectorAll('.progress-step').forEach(s => {
+        const sn = parseInt(s.dataset.stage);
+        s.classList.toggle('active', sn === n);
+        s.classList.toggle('done', sn < n);
+    });
+    if (n === 3 && !state.map) initMap();
+    window.scrollTo(0, 0);
+}
+
+// ============= שלב 1: העלאה =============
+const fileInput = document.getElementById('fileInput');
+const uploadZone = document.getElementById('uploadZone');
+const manualText = document.getElementById('manualText');
+const btnAnalyze = document.getElementById('btnAnalyze');
+
+fileInput.addEventListener('change', e => handleFiles(e.target.files));
+['dragenter', 'dragover'].forEach(ev => uploadZone.addEventListener(ev, e => {
+    e.preventDefault(); uploadZone.classList.add('drag');
+}));
+['dragleave', 'drop'].forEach(ev => uploadZone.addEventListener(ev, e => {
+    e.preventDefault(); uploadZone.classList.remove('drag');
+}));
+uploadZone.addEventListener('drop', e => handleFiles(e.dataTransfer.files));
+manualText.addEventListener('input', updateAnalyzeBtn);
+
+function handleFiles(files) {
+    for (const f of files) state.files.push(f);
+    renderFileList();
+    parseAllFiles();
+}
+function renderFileList() {
+    const list = document.getElementById('fileList');
+    if (!state.files.length) { list.innerHTML = ''; uploadZone.classList.remove('has'); return; }
+    uploadZone.classList.add('has');
+    list.innerHTML = state.files.map((f, i) =>
+        `<div class="file-item">📄 ${f.name} <span class="small-muted">(${(f.size/1024).toFixed(1)} KB)</span> <span class="remove" onclick="removeFile(${i})">✕</span></div>`
+    ).join('');
+}
+function removeFile(i) { state.files.splice(i, 1); renderFileList(); parseAllFiles(); }
+
+async function parseAllFiles() {
+    let combined = '';
+    for (const f of state.files) {
+        try {
+            const ext = f.name.split('.').pop().toLowerCase();
+            if (ext === 'docx') {
+                const buf = await f.arrayBuffer();
+                const r = await mammoth.extractRawText({ arrayBuffer: buf });
+                combined += `=== ${f.name} ===\n${r.value}\n\n`;
+            } else if (ext === 'pptx') {
+                combined += `=== ${f.name} ===\n${await extractPptxText(f)}\n\n`;
+            } else if (ext === 'eml' || ext === 'txt') {
+                combined += `=== ${f.name} ===\n${await f.text()}\n\n`;
+            } else {
+                combined += `=== ${f.name} ===\n[סוג קובץ לא נתמך — יש להדביק טקסט ידנית]\n\n`;
+            }
+        } catch (e) {
+            combined += `=== ${f.name} === [שגיאה: ${e.message}]\n\n`;
+        }
+    }
+    state.rawText = combined;
+    updateAnalyzeBtn();
+}
+
+async function extractPptxText(file) {
+    const zip = await JSZip.loadAsync(await file.arrayBuffer());
+    const slides = Object.keys(zip.files).filter(n => n.match(/^ppt\/slides\/slide\d+\.xml$/)).sort();
+    let text = '';
+    for (const name of slides) {
+        const xml = await zip.files[name].async('string');
+        const matches = xml.match(/<a:t[^>]*>([^<]*)<\/a:t>/g) || [];
+        const slideText = matches.map(m => m.replace(/<[^>]*>/g, '')).join(' ');
+        text += slideText + '\n';
+    }
+    return text;
+}
+
+function updateAnalyzeBtn() {
+    const hasContent = state.rawText.trim() || manualText.value.trim();
+    btnAnalyze.disabled = !hasContent;
+}
+
+function loadExample() {
+    manualText.value = `הנדון: סגירת רחוב אבן גבירול בתל אביב לעבודות תשתית
+
+שלום רב,
+ברצוננו להודיע על סגירת רחוב אבן גבירול בקטע שבין רחוב ארלוזורוב לרחוב ז'בוטינסקי, בתל אביב, לצורך עבודות החלפת קווי מים של חברת "מי אביבים".
+
+הסגירה תחל ביום ראשון, 11.05.2026 בשעה 22:00, ותסתיים ביום רביעי, 14.05.2026 בשעה 05:00.
+התנועה תופנה לרחוב דיזנגוף ולרחוב יהודה הלוי במהלך הזמן הזה.
+
+בכבוד רב,
+מהנדס התנועה`;
+    updateAnalyzeBtn();
+}
+
+// ============= שלב 2: ניתוח Claude =============
+async function analyzeDocument() {
+    const text = (state.rawText + '\n\n' + manualText.value).trim();
+    if (!text) { alert('יש לטעון מסמך או להדביק טקסט'); return; }
+    btnAnalyze.disabled = true;
+    btnAnalyze.innerHTML = '<div class="loader"></div> מנתח...';
+    try {
+        const prompt = `אתה עוזר VP לתכנון תנועה במשרד התחבורה. נתח את הטקסט הבא וחלץ פרטי שיבוש תנועה. החזר JSON בלבד (ללא markdown), במבנה:
+{
+  "eventType": "סוג האירוע (סגירת כביש / עבודות / הפגנה / טקס / תאונה / אחר)",
+  "severity": "low|medium|high|critical",
+  "location": "כתובת מדויקת ככל הניתן",
+  "city": "עיר",
+  "startDateTime": "ISO 8601 (YYYY-MM-DDTHH:mm)",
+  "endDateTime": "ISO 8601",
+  "description": "תיאור מפורט בעברית של 2-4 משפטים",
+  "streets": ["רשימת רחובות מושפעים"],
+  "intersections": ["צמתים מושפעים"],
+  "alternativeRoutes": ["הצעות הסטה אם הוזכרו במקור"],
+  "originalSender": "מי שלח (אם מוזכר)"
+}
+
+הטקסט:
+${text.slice(0, 6000)}`;
+
+        const result = await callClaude(prompt, { maxTokens: 1500 });
+        const jsonMatch = result.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) throw new Error('Claude לא החזיר JSON תקין');
+        const data = JSON.parse(jsonMatch[0]);
+        state.extracted = data;
+        fillExtractionFields(data);
+        goToStage(2);
+    } catch (e) {
+        alert('שגיאה בניתוח: ' + e.message);
+    } finally {
+        btnAnalyze.disabled = false;
+        btnAnalyze.innerHTML = '🔍 נתח את האירוע';
+    }
+}
+
+function fillExtractionFields(d) {
+    document.getElementById('eventType').value = d.eventType || '';
+    document.getElementById('eventSeverity').value = d.severity || 'medium';
+    document.getElementById('eventLocation').value = d.location || '';
+    document.getElementById('eventCity').value = d.city || '';
+    document.getElementById('eventStart').value = d.startDateTime ? d.startDateTime.slice(0, 16) : '';
+    document.getElementById('eventEnd').value = d.endDateTime ? d.endDateTime.slice(0, 16) : '';
+    document.getElementById('eventDescription').value = d.description || '';
+
+    const html = `
+      <div class="summary-box">
+        <div class="kv"><span class="k">רחובות מושפעים:</span><span>${(d.streets||[]).join(', ') || '—'}</span></div>
+        <div class="kv"><span class="k">צמתים:</span><span>${(d.intersections||[]).join(', ') || '—'}</span></div>
+        <div class="kv"><span class="k">הסטות שצוינו במקור:</span><span>${(d.alternativeRoutes||[]).join(', ') || '—'}</span></div>
+        <div class="kv"><span class="k">שולח מקורי:</span><span>${d.originalSender || '—'}</span></div>
+      </div>`;
+    document.getElementById('extractionResult').innerHTML = html;
+}
+
+// ============= שלב 3: זיהוי קווים מושפעים =============
+async function findAffectedLines() {
+    const location = document.getElementById('eventLocation').value.trim();
+    const city = document.getElementById('eventCity').value.trim();
+    if (!location) { alert('יש להזין מיקום'); return; }
+
+    goToStage(3);
+    document.getElementById('linesAlert').innerHTML = '<div class="alert alert-info"><div class="loader" style="border-top-color:#2563eb"></div> מאתר תחנות וקווים בסביבה...</div>';
+
+    try {
+        // 1. גיאוקודינג ע"י Nominatim (חינמי)
+        const coords = await geocode(`${location}, ${city}, Israel`);
+        if (!coords) throw new Error('לא הצלחתי למצוא קואורדינטות עבור הכתובת');
+
+        // 2. חיפוש תחנות בסביבת המיקום ב-Open Bus Stride
+        const stops = await fetchNearbyStops(coords.lat, coords.lon, 0.005);
+        if (!stops.length) {
+            document.getElementById('linesAlert').innerHTML = '<div class="alert alert-warning">לא נמצאו תחנות ב-Open Bus API ברדיוס המבוקש. מנסה רק נספח אישי.</div>';
+        }
+
+        // 3. חיפוש קווים שעוברים בתחנות אלו
+        const linesFromApi = await fetchLinesByStops(stops);
+
+        // 4. השלמה מהנספח האישי
+        const linesFromAppendix = matchAppendix(location, document.getElementById('eventDescription').value);
+
+        const merged = mergeLines(linesFromApi, linesFromAppendix);
+        state.affectedLines = merged;
+        state.coords = coords;
+
+        // 5. בדיקת חפיפה לשעות פעילות
+        const workingHours = document.getElementById('workingHours').value;
+        const startTime = document.getElementById('eventStart').value;
+        const endTime = document.getElementById('eventEnd').value;
+        const overlapInfo = checkWorkingHoursOverlap(startTime, endTime, workingHours);
+
+        document.getElementById('linesAlert').innerHTML = overlapInfo.alert;
+        renderLinesTable(merged, overlapInfo.inHours);
+        addMapMarkers(coords, stops);
+    } catch (e) {
+        document.getElementById('linesAlert').innerHTML = `<div class="alert alert-error">שגיאה: ${e.message}</div>`;
+    }
+}
+
+async function geocode(query) {
+    try {
+        const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`,
+            { headers: { 'Accept-Language': 'he' } });
+        const d = await r.json();
+        if (!d.length) return null;
+        return { lat: parseFloat(d[0].lat), lon: parseFloat(d[0].lon), display: d[0].display_name };
+    } catch (e) { return null; }
+}
+
+async function fetchNearbyStops(lat, lon, delta) {
+    const url = `https://open-bus-stride-api.hasadna.org.il/gtfs_stops/list?` +
+        `stop_lat__greater_or_equal=${lat - delta}&stop_lat__lower_or_equal=${lat + delta}` +
+        `&stop_lon__greater_or_equal=${lon - delta}&stop_lon__lower_or_equal=${lon + delta}` +
+        `&limit=200&order_by=stop_id`;
+    try {
+        const r = await fetch(url);
+        if (!r.ok) return [];
+        return await r.json();
+    } catch { return []; }
+}
+
+async function fetchLinesByStops(stops) {
+    if (!stops.length) return [];
+    // Open Bus Stride: gtfs_ride_stops -> gtfs_routes
+    // לצורך פשטות נשתמש ב-gtfs_routes/list עם filter על stop_code (לא תמיד נתמך) — fallback: לחזיר תחנות עם route דרך gtfs_ride_stops
+    const lines = new Map();
+    const sample = stops.slice(0, 30); // limit
+    for (const s of sample) {
+        try {
+            const url = `https://open-bus-stride-api.hasadna.org.il/gtfs_ride_stops/list?gtfs_stop_id=${s.id}&limit=20`;
+            const r = await fetch(url);
+            if (!r.ok) continue;
+            const rideStops = await r.json();
+            for (const rs of rideStops) {
+                if (rs.gtfs_route_id && !lines.has(rs.gtfs_route_id)) {
+                    lines.set(rs.gtfs_route_id, { gtfsRouteId: rs.gtfs_route_id });
+                }
+            }
+        } catch {}
+    }
+    // הבא פרטי routes
+    const result = [];
+    for (const [id] of lines) {
+        try {
+            const r = await fetch(`https://open-bus-stride-api.hasadna.org.il/gtfs_routes/get?id=${id}`);
+            if (!r.ok) continue;
+            const route = await r.json();
+            result.push({
+                lineNumber: route.route_short_name || '?',
+                description: route.route_long_name || route.route_desc || '',
+                operator: route.agency_name || '',
+                source: 'open-bus-api'
+            });
+        } catch {}
+        if (result.length >= 40) break;
+    }
+    return result;
+}
+
+function matchAppendix(location, description) {
+    if (!settings.appendix && !state.appendix.length) return [];
+    const all = [];
+    if (state.appendix.length) all.push(...state.appendix);
+    if (settings.appendix) {
+        // פירוק טקסט: "קו 5: דיזנגוף, אבן גבירול..."
+        settings.appendix.split('\n').forEach(line => {
+            const m = line.match(/קו\s*(\S+)\s*:\s*(.+)/);
+            if (m) all.push({ lineNumber: m[1], streets: m[2], description: '' });
+        });
+    }
+    const searchText = (location + ' ' + description).toLowerCase();
+    return all.filter(l => {
+        const streets = (l.streets || '').toLowerCase();
+        return streets.split(/[,،]/).some(s => {
+            s = s.trim();
+            return s.length >= 3 && searchText.includes(s);
+        });
+    }).map(l => ({
+        lineNumber: l.lineNumber,
+        description: l.description || `דרך: ${l.streets}`,
+        operator: l.operator || '',
+        source: 'נספח'
+    }));
+}
+
+function mergeLines(a, b) {
+    const map = new Map();
+    [...a, ...b].forEach(l => {
+        const key = `${l.lineNumber}-${l.operator}`;
+        if (!map.has(key)) map.set(key, l);
+    });
+    return Array.from(map.values()).sort((x, y) => {
+        const nx = parseInt(x.lineNumber) || 9999;
+        const ny = parseInt(y.lineNumber) || 9999;
+        return nx - ny;
+    });
+}
+
+function checkWorkingHoursOverlap(start, end, workingHours) {
+    if (!start || !end || !workingHours) return { inHours: true, alert: '' };
+    const m = workingHours.match(/(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})/);
+    if (!m) return { inHours: true, alert: '' };
+    const [_, h1, m1, h2, m2] = m;
+    const wStart = parseInt(h1) * 60 + parseInt(m1);
+    const wEnd = parseInt(h2) * 60 + parseInt(m2);
+    const sd = new Date(start), ed = new Date(end);
+    let inHours = false;
+    const cur = new Date(sd);
+    while (cur < ed) {
+        const t = cur.getHours() * 60 + cur.getMinutes();
+        if (t >= wStart && t < wEnd) { inHours = true; break; }
+        cur.setMinutes(cur.getMinutes() + 30);
+    }
+    if (inHours) {
+        return { inHours: true, alert: `<div class="alert alert-warning"><span>⚠️</span><div><b>השיבוש חופף לשעות פעילות (${workingHours})</b> — נדרשת הסטה פעילה לאוטובוסים.</div></div>` };
+    }
+    return { inHours: false, alert: `<div class="alert alert-success"><span>✓</span><div>השיבוש מחוץ לשעות פעילות אוטובוסים — ייתכן שאין צורך בהסטה מלאה.</div></div>` };
+}
+
+function renderLinesTable(lines, inHours) {
+    state.selectedLines = new Set(lines.map((_, i) => i));
+    const tbody = document.querySelector('#linesTable tbody');
+    if (!lines.length) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:1.5rem; color:var(--text-muted);">לא זוהו קווים מושפעים — ניתן להוסיף ידנית או להמשיך</td></tr>';
+        document.getElementById('lineCount').textContent = '0 קווים';
+        return;
+    }
+    tbody.innerHTML = lines.map((l, i) => `
+        <tr>
+            <td><input type="checkbox" checked onchange="toggleLine(${i}, this.checked)"></td>
+            <td><span class="badge badge-blue">${l.lineNumber}</span></td>
+            <td>${l.description || '—'}</td>
+            <td><span class="small-muted">${l.operator || '—'}</span></td>
+            <td>${inHours ? '<span class="badge badge-yellow">כן</span>' : '<span class="badge badge-gray">לא</span>'}</td>
+        </tr>`).join('');
+    document.getElementById('lineCount').textContent = `${state.selectedLines.size} מתוך ${lines.length} קווים נבחרו`;
+}
+
+function toggleLine(i, checked) {
+    if (checked) state.selectedLines.add(i); else state.selectedLines.delete(i);
+    document.getElementById('lineCount').textContent = `${state.selectedLines.size} מתוך ${state.affectedLines.length} קווים נבחרו`;
+}
+function toggleAllLines(v) {
+    document.querySelectorAll('#linesTable tbody input[type=checkbox]').forEach((cb, i) => {
+        cb.checked = v; toggleLine(i, v);
+    });
+}
+
+function initMap() {
+    state.map = L.map('map').setView([32.0853, 34.7818], 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OSM' }).addTo(state.map);
+}
+function addMapMarkers(coords, stops) {
+    if (!state.map) initMap();
+    state.mapMarkers.forEach(m => state.map.removeLayer(m));
+    state.mapMarkers = [];
+    if (coords) {
+        const c = L.marker([coords.lat, coords.lon], { icon: L.divIcon({ html: '🚧', className: '', iconSize: [30, 30] }) }).addTo(state.map).bindPopup('מוקד שיבוש');
+        state.mapMarkers.push(c);
+        state.map.setView([coords.lat, coords.lon], 15);
+    }
+    stops.slice(0, 50).forEach(s => {
+        const m = L.circleMarker([s.stop_lat, s.stop_lon], { radius: 5, color: '#2563eb', fillOpacity: 0.6 }).addTo(state.map).bindPopup(`${s.stop_code || ''} - ${s.stop_name || ''}`);
+        state.mapMarkers.push(m);
+    });
+}
+
+function loadAppendix(e) {
+    const f = e.target.files[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+        try {
+            const wb = XLSX.read(ev.target.result, { type: 'binary' });
+            const ws = wb.Sheets[wb.SheetNames[0]];
+            const rows = XLSX.utils.sheet_to_json(ws);
+            state.appendix = rows.map(r => ({
+                lineNumber: r['קו'] || r['line'] || r['route'] || r['מס_קו'] || '',
+                description: r['תיאור'] || r['description'] || '',
+                streets: r['רחובות'] || r['streets'] || r['תחנות'] || '',
+                operator: r['מפעיל'] || r['operator'] || ''
+            })).filter(r => r.lineNumber);
+            document.getElementById('appendixStatus').textContent = `✓ נטענו ${state.appendix.length} קווים מהנספח`;
+        } catch (err) {
+            document.getElementById('appendixStatus').textContent = 'שגיאה: ' + err.message;
+        }
+    };
+    reader.readAsBinaryString(f);
+}
+
+// ============= שלב 4: הסטה =============
+async function generateDiversion() {
+    const selected = state.affectedLines.filter((_, i) => state.selectedLines.has(i));
+    if (!selected.length && !confirm('לא נבחרו קווים. להמשיך בכל זאת?')) return;
+    goToStage(4);
+    document.getElementById('diversionContent').innerHTML = '<div class="alert alert-info"><div class="loader" style="border-top-color:#2563eb"></div> Claude מחשב מסלולי הסטה...</div>';
+
+    const eventDesc = document.getElementById('eventDescription').value;
+    const eventLocation = document.getElementById('eventLocation').value;
+    const eventCity = document.getElementById('eventCity').value;
+
+    const prompt = `אתה מתכנן תנועה מומחה במשרד התחבורה. נתח את האירוע הבא ובנה הצעת מסלולי הסטה עבור קווי האוטובוסים המושפעים. שים לב לאילוצים של אוטובוסים: רוחב כביש (לפחות 3.5 מ'), רדיוס סיבוב גדול, גובה גשרים מינימלי, רחובות חד-סטריים, ותחנות עם נגישות.
+
+האירוע:
+- מיקום: ${eventLocation}, ${eventCity}
+- תיאור: ${eventDesc}
+- חומרה: ${document.getElementById('eventSeverity').value}
+- תקופה: ${document.getElementById('eventStart').value} עד ${document.getElementById('eventEnd').value}
+
+קווים מושפעים: ${selected.map(l => l.lineNumber + ' (' + l.description + ')').join('; ') || 'לא צוינו'}
+
+החזר תשובה בעברית במבנה הבא:
+1) **המלצה כללית**: 2-3 משפטים
+2) **מסלול הסטה לקווים** (פר קו או קבוצה): רחובות חלופיים, כיוון נסיעה, נקודות החזרה למסלול
+3) **תחנות מבוטלות זמנית**: רשימה
+4) **תחנות חלופיות**: היכן הנוסעים יוכלו לעלות
+5) **השלכות צפויות**: עיכובים, עומס וכו'`;
+
+    try {
+        const result = await callClaude(prompt, { maxTokens: 2500 });
+        document.getElementById('diversionText').value = result;
+        // חילוץ תחנות מבוטלות (אופציונלי)
+        const stopsMatch = result.match(/תחנות מבוטלות[^\n]*\n([\s\S]*?)(?=\n\d\)|$)/);
+        if (stopsMatch) document.getElementById('affectedStops').value = stopsMatch[1].trim();
+        document.getElementById('diversionContent').innerHTML = `<div class="alert alert-success">✓ הצעת הסטה נוצרה. ניתן לערוך אותה לפני המעבר לשלב הבא.</div>`;
+        state.diversion = result;
+    } catch (e) {
+        document.getElementById('diversionContent').innerHTML = `<div class="alert alert-error">שגיאה: ${e.message}</div>`;
+    }
+}
+
+// ============= שלב 5: יצירת הודעה =============
+async function generateMessage() {
+    goToStage(5);
+    const diversion = document.getElementById('diversionText').value;
+    const stops = document.getElementById('affectedStops').value;
+    const eventDesc = document.getElementById('eventDescription').value;
+    const eventLocation = document.getElementById('eventLocation').value;
+    const startStr = document.getElementById('eventStart').value;
+    const endStr = document.getElementById('eventEnd').value;
+    const selected = state.affectedLines.filter((_, i) => state.selectedLines.has(i));
+
+    document.getElementById('msgTitle').value = 'הודעה לציבור — שיבוש בתנועת אוטובוסים';
+    document.getElementById('msgBody').value = 'מנסח הודעה...';
+
+    const prompt = `נסח הודעת תנועה רשמית בעברית, ברורה, תמציתית ומכובדת, עבור פרסום פנים-ארגוני ולציבור הנוסעים. כלול:
+- כותרת קצרה
+- מהות השיבוש
+- מועד תחילה וסיום
+- קווים מושפעים: ${selected.map(l => l.lineNumber).join(', ')}
+- מסלול הסטה
+- תחנות מבוטלות / חלופיות
+- בקשת התנצלות וקריאה לתשומת לב
+
+מקור: ${eventDesc}
+מיקום: ${eventLocation}
+תקופה: ${startStr} עד ${endStr}
+פרטי הסטה:
+${diversion}
+
+תחנות:
+${stops}
+
+החזר את ההודעה בלבד, ללא הסברים נוספים. עד 250 מילים.`;
+
+    try {
+        const msg = await callClaude(prompt, { maxTokens: 1200 });
+        document.getElementById('msgBody').value = msg;
+        renderWordPreview();
+    } catch (e) {
+        document.getElementById('msgBody').value = `שגיאה ביצירת הודעה: ${e.message}\n\nניתן להזין ידנית.`;
+    }
+}
+
+async function regenerateMessage() { await generateMessage(); }
+
+document.addEventListener('input', e => {
+    if (e.target.id === 'msgTitle' || e.target.id === 'msgBody') renderWordPreview();
+});
+
+function renderWordPreview() {
+    const t = document.getElementById('msgTitle').value;
+    const b = document.getElementById('msgBody').value;
+    document.getElementById('wordPreview').innerHTML = `<h3>${escapeHtml(t)}</h3><div style="white-space: pre-wrap;">${escapeHtml(b)}</div>`;
+}
+function escapeHtml(s) { return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+async function downloadWord() {
+    const title = document.getElementById('msgTitle').value;
+    const body = document.getElementById('msgBody').value;
+    const { Document, Packer, Paragraph, TextRun, AlignmentType, HeadingLevel } = docx;
+
+    const paragraphs = [
+        new Paragraph({
+            alignment: AlignmentType.RIGHT, bidirectional: true, heading: HeadingLevel.HEADING_1,
+            children: [new TextRun({ text: title, bold: true, rightToLeft: true, size: 32 })]
+        }),
+        new Paragraph({
+            alignment: AlignmentType.RIGHT, bidirectional: true,
+            children: [new TextRun({ text: settings.senderName + ' | ' + new Date().toLocaleDateString('he-IL'), rightToLeft: true, italics: true, size: 20 })]
+        }),
+        new Paragraph({ text: '' })
+    ];
+    body.split('\n').forEach(line => {
+        paragraphs.push(new Paragraph({
+            alignment: AlignmentType.RIGHT, bidirectional: true,
+            children: [new TextRun({ text: line, rightToLeft: true, size: 24 })]
+        }));
+    });
+
+    const doc = new Document({ sections: [{ properties: {}, children: paragraphs }] });
+    const blob = await Packer.toBlob(doc);
+    saveAs(blob, `הודעת_תנועה_${new Date().toISOString().slice(0,10)}.docx`);
+}
+
+// ============= שלב 6: אישור ושליחה =============
+function copyApprovalLink() {
+    const link = buildApprovalLink();
+    navigator.clipboard.writeText(link).then(() => {
+        document.getElementById('approvalStatus').innerHTML = '<div class="alert alert-success">✓ הקישור הועתק</div>';
+    });
+}
+
+function buildApprovalLink() {
+    const data = {
+        title: document.getElementById('msgTitle').value,
+        body: document.getElementById('msgBody').value,
+        eventType: document.getElementById('eventType').value,
+        location: document.getElementById('eventLocation').value,
+        start: document.getElementById('eventStart').value,
+        end: document.getElementById('eventEnd').value,
+        lines: state.affectedLines.filter((_, i) => state.selectedLines.has(i)).map(l => l.lineNumber),
+        recipients: document.getElementById('recipientsList').value
+    };
+    const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(data))));
+    return `${location.origin}${location.pathname}?approve=${encoded}`;
+}
+
+function sendForApproval() {
+    const managerEmail = document.getElementById('managerEmail').value.trim();
+    if (!managerEmail) { alert('יש להזין אימייל מנהל'); return; }
+    const recipients = document.getElementById('recipientsList').value.trim();
+    if (!recipients) { alert('יש להזין רשימת תפוצה'); return; }
+
+    const title = document.getElementById('msgTitle').value;
+    const body = document.getElementById('msgBody').value;
+    const approvalLink = buildApprovalLink();
+
+    const emailBody = `שלום,
+
+מצורפת טיוטת הודעת תנועה לאישורך:
+
+━━━━━━━━━━━━━━━━━━━━━
+${title}
+━━━━━━━━━━━━━━━━━━━━━
+${body}
+━━━━━━━━━━━━━━━━━━━━━
+
+📋 פרטי האירוע:
+• מיקום: ${document.getElementById('eventLocation').value}
+• תקופה: ${document.getElementById('eventStart').value} עד ${document.getElementById('eventEnd').value}
+• קווים מושפעים: ${state.affectedLines.filter((_, i) => state.selectedLines.has(i)).map(l => l.lineNumber).join(', ')}
+• רשימת תפוצה לאחר אישור: ${recipients}
+
+✅ לאישור ושליחה לרשימת התפוצה, לחץ על הקישור הבא:
+${approvalLink}
+
+❌ לדחייה — השב לאימייל זה.
+
+בכבוד רב,
+${settings.senderName || 'אגף תכנון התנועה'}`;
+
+    const mailtoLink = `mailto:${encodeURIComponent(managerEmail)}?subject=${encodeURIComponent('לאישור: ' + title)}&body=${encodeURIComponent(emailBody)}`;
+
+    document.getElementById('approvalPreview').innerHTML = `
+        <div><b>אל:</b> ${managerEmail}</div>
+        <div><b>נושא:</b> לאישור: ${escapeHtml(title)}</div>
+        <hr style="margin: 0.5rem 0;">
+        <div style="white-space: pre-wrap; font-size: 0.8rem;">${escapeHtml(emailBody.slice(0, 800))}...</div>`;
+
+    window.location.href = mailtoLink;
+    document.getElementById('approvalStatus').innerHTML =
+        '<div class="alert alert-success">✓ נפתח Outlook עם טיוטה למנהל. כשהמנהל ילחץ על הקישור — תיפתח אצלו טיוטה לרשימת התפוצה.</div>';
+}
+
+function resetAll() {
+    if (!confirm('להתחיל מחדש? כל הנתונים ימחקו.')) return;
+    state.files = []; state.rawText = ''; state.extracted = null;
+    state.affectedLines = []; state.selectedLines = new Set(); state.diversion = '';
+    document.getElementById('manualText').value = '';
+    document.getElementById('fileList').innerHTML = '';
+    uploadZone.classList.remove('has');
+    goToStage(1);
+}
+
+// ============= אתחול =============
+window.addEventListener('load', () => {
+    if (!settings.claudeKey) {
+        setTimeout(() => {
+            if (confirm('לא הוגדר מפתח Claude API. לפתוח את ההגדרות?')) openSettings();
+        }, 500);
+    }
+});
+</script>
+</body>
+</html>
