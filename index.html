@@ -212,7 +212,10 @@
                 <strong>📌 הגדרות:</strong>
                 • <span style="color: var(--accent-red);">אי-ביצוע</span>: ≥<span id="infoNE">20</span> דק' |
                 • <span style="color: var(--accent-yellow);">אי-דיוק</span>: <span id="infoIN">5</span>-<span id="infoNE2">20</span> דק' |
-                • <span style="color: var(--accent-purple);">תקנה 168</span>: הפסקה ≥30' או 2×15' לכל 4 שעות
+                • <span style="color: var(--accent-purple);">תקנה 168</span> (3 כללים):
+                <strong>1</strong> הפסקה ≥30' רצופות כל 4 שעות נהיגה (מאפסת מונה) |
+                <strong>2</strong> 15' מותר רק במקטע הראשון (עד 4 שעות נהיגה מצטברת); מכאן כל הפסקה ≥30' |
+                <strong>3</strong> נהיגה &gt;9 שעות: 60' הפסקה בחלון שעות-נהיגה 6.0–8.5, ובו ≥30' רצופות
             </div>
             
             <div class="info-box warning" id="routeIdInfo" style="display:none;">
@@ -287,6 +290,10 @@
                         <option value="both_ok">תכנון ✓ + אחוזון ✓</option>
                         <option value="plan_ok_actual_fail">תכנון ✓ אבל אחוזון ✗</option>
                         <option value="plan_fail">תכנון ✗</option>
+                        <option value="rule1">הפרת כלל 1 בלבד-או-בין-השאר</option>
+                        <option value="rule2">הפרת כלל 2</option>
+                        <option value="rule3">הפרת כלל 3</option>
+                        <option value="hard">חמורות (כלל 1 או 3)</option>
                     </select>
                     <button class="btn btn-secondary btn-sm" onclick="exportDutiesCSV()">📥 CSV</button>
                 </div>
@@ -297,8 +304,11 @@
                             <th>התחלה</th>
                             <th>סיום</th>
                             <th onclick="sortDuties('total_duration')">משך</th>
+                            <th onclick="sortDuties('actual_drive')">נהיגה</th>
                             <th onclick="sortDuties('plan_compliant')">168 תכנון</th>
                             <th onclick="sortDuties('actual_compliant')">168 אחוזון</th>
+                            <th>כללים שהופרו</th>
+                            <th>פירוט ההפרות (כלל · שעת-נהיגה · משך ההפסקה)</th>
                         </tr></thead>
                         <tbody id="dutiesBody"></tbody>
                     </table>
@@ -609,55 +619,162 @@
         return { mu, sigma };
     }
 
-    function checkRule168(events, useActual, tripDurations) {
-        const breakTypes = ['standby', 'break', 'meal_break', 'split'];
-        const workEvents = events.filter(e => e.eventType === 'service_trip' || e.eventType === 'deadhead' || breakTypes.includes(e.eventType));
-        const driving = workEvents.filter(e => e.eventType === 'service_trip' || e.eventType === 'deadhead');
-        if (driving.length === 0) return { compliant: true, segments: [], details: 'אין נהיגה' };
-        
-        const adjusted = workEvents.map(e => {
-            const start = timeToMinutes(e.startTime) + e.dayOffset * 1440;
-            let end = timeToMinutes(e.endTime) + e.dayOffset * 1440;
+    // ===================================================================================
+    // מנוע תקנה 168 — שלושת הכללים.
+    // מקור קנוני: מכתב מנכ"ל הרשות הארצית לתח"צ, 12.2.2026, סימוכין 4000-0202-2026-000103.
+    //   כלל 1 — כל 4 שעות נהיגה חובה הפסקה מוסמכת ≥30 רצופות. ≥30 מאפסת את המונה.
+    //   כלל 2 — מקטע ראשון (עד 4 שעות נהיגה מצטברת): מותר 15 (עד 2×15).
+    //            מקטע שני ואילך: כל הפסקה חייבת ≥30. הפסקה <30 = הפרה, ואינה מאפסת.
+    //   כלל 3 — נהיגה > 9 שעות: 60 דק' הפסקה בחלון שעות-נהיגה 6.0–8.5, ובו ≥30 רצופה אחת.
+    // מאומת מול 4 דוגמאות-הכיול של הרשות + 22 מקרי-קצה (ערכת-רגרסיה מוחזקת מחוץ למאגר זה).
+    // פרמטרי-פרשנות נעולים לפי מסמך-הפרשנות המחייב של המפעיל (מוחזק מחוץ למאגר זה).
+    // ===================================================================================
+    const REG168_VERSION = 'reg168-engine v1.1-locked';
+    const REG168 = {
+        rule1Window: 240, qualify: 30,
+        firstSegmentBasis: 'driving',   // 'driving' | 'workday'
+        firstSegment: 240, rule2Min: 30,
+        rule3Trigger: 540, rule3From: 360, rule3To: 510, rule3Required: 60, rule3Chunk: 15,
+        rule3ExemptsRule2: true,        // נעול: הפסקות ≥15 בחלון כלל-3 (כשהוא פעיל) נשפטות תחת כלל-3;
+                                        // עוגן-ה-30 נאכף בתוך כלל-3 עצמו (לפי מסמך-הפרשנות המחייב)
+        pair15ResetsRule1: true,        // נעול: 2×15 במקטע הראשון שקולות ל-30 ומאפסות את מונה כלל 1
+        minBreak: 15,                   // מתחת לזה = מרווח תפעולי, לא הפסקה
+        mergeAdjacent: true
+    };
+    const R168_DRIVE = new Set(['service_trip','deadhead','idle_trip','depot_pull_out','depot_pull_in','drive']);
+    const R168_REST  = new Set(['standby','break','meal_break','split','swing','rest','layover']);
+
+    function r168hhmm(m) {
+        if (m == null) return '';
+        m = Math.round(m);
+        return String(Math.floor(m/60)%24).padStart(2,'0') + ':' + String(((m%60)+60)%60).padStart(2,'0');
+    }
+
+    // events → ציר-זמן {kind:'drive'|'rest', start, end, dur} כולל פערים-משתמעים ומיזוג-מנוחות
+    function r168Timeline(events, useActual, tripDurations, cfg) {
+        const raw = [];
+        for (const e of events) {
+            const kind = R168_DRIVE.has(e.eventType) ? 'drive' : (R168_REST.has(e.eventType) ? 'rest' : 'neutral');
+            if (kind === 'neutral') continue;              // sign_on/sign_off — לא נהיגה ולא מנוחה
+            const start = timeToMinutes(e.startTime) + (e.dayOffset||0) * 1440;
+            let end = timeToMinutes(e.endTime) + (e.dayOffset||0) * 1440;
             if (end < start) end += 1440;
             if (useActual && e.eventType === 'service_trip') {
                 const key = `${e.routeId}-${e.direction}-${e.startTime}`;
-                if (tripDurations[key]) end = start + tripDurations[key];
+                if (tripDurations && tripDurations[key]) end = start + tripDurations[key];
             }
-            return { ...e, start, end };
-        }).sort((a, b) => a.start - b.start);
-        
-        const drivingAdj = adjusted.filter(e => e.eventType === 'service_trip' || e.eventType === 'deadhead');
-        const firstDriveStart = drivingAdj[0].start;
-        const lastEnd = Math.max(...drivingAdj.map(e => e.end));
-        const totalDuration = lastEnd - firstDriveStart;
-        if (totalDuration < 240) return { compliant: true, segments: [], details: `< 4 שעות` };
-        
-        const segments = [];
-        let segStart = firstDriveStart;
-        let segNum = 1;
-        
-        while (segStart < lastEnd && segNum <= 10) {
-            const actualSegEnd = Math.min(segStart + 240, lastEnd);
-            const breaks = [];
-            adjusted.filter(e => breakTypes.includes(e.eventType)).forEach(e => {
-                if (e.end <= segStart || e.start >= actualSegEnd) return;
-                const overlap = Math.min(e.end, actualSegEnd) - Math.max(e.start, segStart);
-                if (overlap > 0) breaks.push({ overlap, full: e.end - e.start });
-            });
-            
-            const totalBreak = breaks.reduce((a, b) => a + b.overlap, 0);
-            const breaks15 = breaks.filter(b => b.overlap >= 15).length;
-            const has30 = breaks.some(b => b.full >= 30);
-            let isOk = has30 || (breaks15 >= 2 && totalBreak >= 30);
-            if (actualSegEnd - segStart < 180) isOk = true;
-            
-            segments.push({ num: segNum, isOk });
-            segStart += 240;
-            segNum++;
+            raw.push({ kind, type: e.eventType, start, end, dur: end - start,
+                       label: e.route ? ('קו ' + e.route) : (e.eventType || '') });
         }
-        
-        const allOk = segments.every(s => s.isOk);
-        return { compliant: allOk, segments, details: allOk ? '✓' : `מקטעים: ${segments.filter(s => !s.isOk).map(s => s.num).join(',')}` };
+        raw.sort((a,b) => a.start - b.start || a.end - b.end);
+        // פערים-משתמעים בין אירועים = מנוחה
+        const seq = [];
+        for (const r of raw) {
+            if (seq.length) {
+                const gap = r.start - seq[seq.length-1].end;
+                if (gap > 0.5) seq.push({ kind:'rest', type:'gap', start: seq[seq.length-1].end,
+                                          end: r.start, dur: gap, label:'פער' });
+            }
+            seq.push(r);
+        }
+        if (!cfg.mergeAdjacent) return seq;
+        const out = [];                                    // מיזוג מנוחות סמוכות
+        for (const x of seq) {
+            const p = out[out.length-1];
+            if (p && p.kind === 'rest' && x.kind === 'rest') { p.end = x.end; p.dur = p.end - p.start; }
+            else out.push(Object.assign({}, x));
+        }
+        return out;
+    }
+
+    function checkRule168(events, useActual, tripDurations, cfgOverride) {
+        const cfg = Object.assign({}, REG168, cfgOverride || {});
+        const tl = r168Timeline(events || [], useActual, tripDurations, cfg);
+        const empty = { compliant:true, violations:[], rules:[], totalDrive:0, breaks:[],
+                        details:'אין נהיגה', segments:[] };
+        if (!tl.length) return empty;
+        const totalDrive = tl.filter(x => x.kind==='drive').reduce((a,b) => a+b.dur, 0);
+        if (totalDrive <= 0) return empty;
+
+        const shiftStart = tl[0].start;
+        const rule3Active = totalDrive > cfg.rule3Trigger;
+        let cum = 0, sinceReset = 0, rule1Armed = true, winTotal = 0, winHas30 = false;
+        let pending15 = false;   // הפסקת-15 ראשונה של צמד 2×15 במקטע הראשון
+        const V = [], B = [];
+
+        for (const x of tl) {
+            if (x.kind === 'drive') {
+                const before = sinceReset;
+                sinceReset += x.dur; cum += x.dur;
+                if (rule1Armed && before < cfg.rule1Window && sinceReset >= cfg.rule1Window) {
+                    const crossed = x.start + (cfg.rule1Window - before);
+                    V.push({ rule:1, severity:'גבוהה', at: r168hhmm(crossed),
+                        driveMin: Math.round(sinceReset), cumMin: Math.round(cum),
+                        breakMin: null, requiredMin: cfg.qualify,
+                        desc: `נהיגה ${Math.round(sinceReset)} דק' (${(sinceReset/60).toFixed(1)} שע') מאז ההפסקה המוסמכת האחרונה — `
+                            + `חצתה 4 שעות ב-${r168hhmm(crossed)} ללא הפסקה ≥${cfg.qualify} דק'` });
+                    rule1Armed = false;
+                }
+                continue;
+            }
+            const d = x.dur;
+            const inWin = cum >= cfg.rule3From && cum <= cfg.rule3To;
+            const rec = { at: r168hhmm(x.start), dur: Math.round(d), cumMin: Math.round(cum),
+                          cumH: +(cum/60).toFixed(1), inWindow: inWin, resets:false, counts: d >= cfg.minBreak };
+            if (d < cfg.minBreak) { rec.note = `מרווח <${cfg.minBreak} דק' — לא נספר כהפסקה`; B.push(rec); continue; }
+
+            const secondSeg = cfg.firstSegmentBasis === 'driving'
+                ? (cum >= cfg.firstSegment) : ((x.start - shiftStart) >= cfg.firstSegment);
+
+            if (d >= cfg.qualify) {
+                sinceReset = 0; rule1Armed = true; pending15 = false; rec.resets = true;
+                rec.note = `הפסקה מוסמכת (≥${cfg.qualify}) — מאפסת את מונה כלל 1`;
+            } else {
+                const exempt = cfg.rule3ExemptsRule2 && rule3Active && inWin && d >= cfg.rule3Chunk;
+                if (secondSeg && !exempt) {
+                    V.push({ rule:2, severity:'בינונית', at: r168hhmm(x.start),
+                        breakMin: Math.round(d), requiredMin: cfg.rule2Min,
+                        deficitMin: Math.round(cfg.rule2Min - d), cumMin: Math.round(cum),
+                        driveMin: Math.round(cum), inWindow: inWin,
+                        desc: `הפסקה ${Math.round(d)} דק' ב-${r168hhmm(x.start)} — מקטע שני `
+                            + `(${Math.round(cum)} דק' נהיגה מצטברת = ${(cum/60).toFixed(1)} שע') דורש ≥${cfg.rule2Min} רצופות. `
+                            + `חסרות ${Math.round(cfg.rule2Min - d)} דק'.` });
+                    rec.note = 'הפרת כלל 2';
+                } else if (!secondSeg) {
+                    if (cfg.pair15ResetsRule1 && pending15) {
+                        sinceReset = 0; rule1Armed = true; pending15 = false; rec.resets = true;
+                        rec.note = '15 שנייה של צמד 2×15 במקטע הראשון — שקולה ל-30, מאפסת את מונה כלל 1';
+                    } else {
+                        pending15 = true;
+                        rec.note = 'מקטע ראשון — מותרת כחלק מ-2×15';
+                    }
+                } else rec.note = 'פטורה (חלון כלל 3)';
+            }
+            if (inWin && d >= cfg.rule3Chunk) { winTotal += d; if (d >= cfg.qualify) winHas30 = true; }
+            B.push(rec);
+        }
+
+        let rule3 = { triggered: rule3Active, windowBreakMin: Math.round(winTotal), has30: winHas30, satisfied: true };
+        if (rule3Active) {
+            const ok = winTotal >= cfg.rule3Required && winHas30;
+            rule3.satisfied = ok;
+            rule3.deficitMin = Math.max(0, Math.round(cfg.rule3Required - winTotal));
+            if (!ok) {
+                const parts = [];
+                if (winTotal < cfg.rule3Required)
+                    parts.push(`רק ${Math.round(winTotal)} דק' הפסקה בחלון (נדרש ${cfg.rule3Required}, חסרות ${rule3.deficitMin})`);
+                if (!winHas30) parts.push(`אין הפסקה רצופה ≥${cfg.qualify} דק' בחלון`);
+                V.push({ rule:3, severity:'גבוהה', at:'', breakMin: Math.round(winTotal),
+                    requiredMin: cfg.rule3Required, deficitMin: rule3.deficitMin,
+                    driveMin: Math.round(totalDrive),
+                    desc: `נהיגה ${Math.round(totalDrive)} דק' (${(totalDrive/60).toFixed(1)} שע' > 9) — `
+                        + `בחלון שעות-נהיגה 6.0–8.5: ${parts.join(' · ')}` });
+            }
+        }
+        const rules = [...new Set(V.map(v => v.rule))].sort();
+        return { compliant: V.length === 0, violations: V, rules, breaks: B, rule3,
+                 totalDrive: Math.round(totalDrive), hard: rules.includes(1) || rules.includes(3),
+                 segments: [], details: V.length ? 'כללים: ' + rules.join(', ') : '✓' };
     }
 
     // === Main Analysis ===
@@ -965,7 +1082,11 @@
             
             dutiesResults.push({
                 duty_id: dutyId, startTime: firstDrive?.startTime || '', endTime: lastEvent?.endTime || '',
-                total_duration: totalDur, plan_compliant: plan168.compliant, actual_compliant: actual168.compliant
+                total_duration: totalDur, plan_compliant: plan168.compliant, actual_compliant: actual168.compliant,
+                plan_rules: plan168.rules, actual_rules: actual168.rules,
+                plan_drive: plan168.totalDrive, actual_drive: actual168.totalDrive,
+                plan_violations: plan168.violations, actual_violations: actual168.violations,
+                hard: actual168.hard
             });
             
             tripsResults.filter(t => t.duty_id === dutyId).forEach(t => {
@@ -1158,15 +1279,32 @@
             if (f168 === 'both_ok' && (!d.plan_compliant || !d.actual_compliant)) return false;
             if (f168 === 'plan_ok_actual_fail' && (!d.plan_compliant || d.actual_compliant)) return false;
             if (f168 === 'plan_fail' && d.plan_compliant) return false;
+            if (f168 === 'rule1' && !(d.actual_rules||[]).includes(1)) return false;
+            if (f168 === 'rule2' && !(d.actual_rules||[]).includes(2)) return false;
+            if (f168 === 'rule3' && !(d.actual_rules||[]).includes(3)) return false;
+            if (f168 === 'hard' && !d.hard) return false;
             return true;
         });
         
         document.getElementById('dutiesBody').innerHTML = filtered.map(d => {
+            const rules = (d.actual_rules||[]).map(r =>
+                `<span class="badge ${r===2?'badge-purple':'badge-red'}">כלל ${r}</span>`).join(' ') || '—';
+            const det = (d.actual_violations||[]).map(v =>
+                `<div style="font-size:0.78rem;line-height:1.45;">
+                   <strong>כלל ${v.rule}</strong> [${v.severity}]
+                   ${v.at?`· ${v.at}`:''}
+                   ${v.driveMin!=null?`· שעת-נהיגה ${(v.driveMin/60).toFixed(1)}`:''}
+                   ${v.breakMin!=null?`· הפסקה ${v.breakMin}' (נדרש ${v.requiredMin}')`:''}
+                   ${v.deficitMin?`· <span style="color:var(--accent-red)">חסרות ${v.deficitMin}'</span>`:''}
+                   <br><span style="color:var(--text-secondary)">${v.desc}</span></div>`).join('') || '—';
             return `<tr>
                 <td><strong>${d.duty_id}</strong></td><td>${d.startTime}</td><td>${d.endTime}</td>
                 <td>${(d.total_duration/60).toFixed(1)}h</td>
+                <td>${((d.actual_drive||0)/60).toFixed(1)}h</td>
                 <td>${d.plan_compliant?'<span class="badge badge-green">✓</span>':'<span class="badge badge-purple">✗</span>'}</td>
                 <td>${d.actual_compliant?'<span class="badge badge-green">✓</span>':'<span class="badge badge-red">✗</span>'}</td>
+                <td>${rules}</td>
+                <td style="max-width:520px;text-align:right;">${det}</td>
             </tr>`;
         }).join('');
     }
@@ -1310,10 +1448,22 @@
     }
 
     function exportDutiesCSV() {
-        const headers = ['סידור','התחלה','סיום','משך','168_תכנון','168_אחוזון'];
+        const headers = ['סידור','התחלה','סיום','משך','נהיגה_דק','168_תכנון','168_אחוזון',
+                         'כללים_שהופרו','כלל','חומרה','שעה','שעת_נהיגה','משך_הפסקה','נדרש','חסר','תיאור'];
         let csv = headers.join(',') + '\n';
+        const q = v => '"' + String(v == null ? '' : v).replace(/"/g,'""') + '"';
         dutiesResults.forEach(d => {
-            csv += [d.duty_id, d.startTime, d.endTime, (d.total_duration/60).toFixed(1), d.plan_compliant?'V':'X', d.actual_compliant?'V':'X'].join(',') + '\n';
+            const base = [d.duty_id, d.startTime, d.endTime, (d.total_duration/60).toFixed(1),
+                          d.actual_drive ?? '', d.plan_compliant?'V':'X', d.actual_compliant?'V':'X',
+                          (d.actual_rules||[]).join('|')];
+            const vs = d.actual_violations || [];
+            if (!vs.length) { csv += base.concat(['','','','','','','','']).map(q).join(',') + '\n'; return; }
+            vs.forEach(v => {
+                csv += base.concat([v.rule, v.severity, v.at || '',
+                                    v.driveMin != null ? (v.driveMin/60).toFixed(1) : '',
+                                    v.breakMin ?? '', v.requiredMin ?? '', v.deficitMin ?? '',
+                                    v.desc]).map(q).join(',') + '\n';
+            });
         });
         downloadCSV(csv, 'duties_rule168.csv');
     }
